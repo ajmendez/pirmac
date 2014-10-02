@@ -9,6 +9,8 @@ import time
 import ephem
 import datetime
 
+from gmail import send_email
+
 from apiclient.discovery import build
 from apiclient.errors import HttpError
 from apiclient.http import MediaFileUpload
@@ -90,13 +92,13 @@ def get_authenticated_service(args):
   return build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION,
     http=credentials.authorize(httplib2.Http()))
 
-def initialize_upload(youtube, options):
+def initialize_upload(youtube, options, description):
   tags = None
 
   body=dict(
     snippet=dict(
-      title=datetime.datetime.today().strftime("%m-%d-%Y"),
-      description="IR Timelapse from a PI",
+      title=datetime.datetime.today().strftime("%Y-%m-%d"),
+      description=description,
       tags="timelapse,balitmore",
       categoryId=""
     ),
@@ -161,37 +163,62 @@ def resumable_upload(insert_request):
 
 openmax_dir = os.path.expanduser('~/tmp/timelapse/rpi-openmax-demos-master')
 
+
+def utc_mktime(utc_tuple):
+    """Returns number of seconds elapsed since epoch
+
+    Note that no timezone are taken into consideration.
+
+    utc tuple must be: (year, month, day, hour, minute, second)
+
+    """
+
+    if len(utc_tuple) == 6:
+        utc_tuple += (0, 0, 0)
+    return time.mktime(utc_tuple) - time.mktime((1970, 1, 1, 0, 0, 0, 0, 0, 0))
+
+def datetime_to_timestamp(dt):
+    """Converts a datetime object to UTC timestamp"""
+
+    return int(utc_mktime(dt.timetuple()))
+
+# if __name__ == '__main__':
+#   # exiftool exifread flickrapi
+#   from scintillate.api import Upload
+#   flickr = Upload()
+#   now = datetime.datetime.today()
+#   flickr.push(filename='output.mp4',
+#               title='{:d} : {}'.format(datetime_to_timestamp(now), now.strftime("%Y-%m-%d")),
+#               description='Raspberry Pi IR camera',
+#               tags =['IR','timelapse', 'movie'],
+#               ispublic=True)
+
+
+
 if __name__ == '__main__':
   START = ('start' in sys.argv)
-  if START:
-      sys.argv.pop(sys.argv.index('start'))
+  if START: sys.argv.pop(sys.argv.index('start'))
   args = argparser.parse_args()
 
   now = datetime.datetime.now()
-
   here = ephem.Observer()
-
   here.lon, here.lat = '-76.623434', '39.331628'
-
   sunrise = here.next_rising(ephem.Sun())
-
   sunset = here.next_setting(ephem.Sun())
 
   time_before = datetime.timedelta(minutes=60)
-
   time_after = datetime.timedelta(minutes=60)
-
   sunrise = ephem.localtime(sunrise) - time_before
-
   sunset = ephem.localtime(sunset) + time_after
 
-  if START:
-      sunrise = now
+
+
+
+
+  if START:sunrise = now
 
   video_length = (sunset - sunrise).total_seconds() * 1000
-  
   total_frames = 120 * 60
-
   frame_time = video_length / total_frames
 
   RECORD_COMMAND = "raspiyuv -awb off -ex verylong -h 1072 -w 1920 -t %(length)d -tl %(slice)d -o - | %(dir)s/rpi-encode-yuv > %(file)s"
@@ -202,7 +229,18 @@ if __name__ == '__main__':
 
   print("Sleeping for %d seconds" % sleep_time)
 
+  description='''IR timelapse from a Raspberry PI
+
+Sunrise: {sunrise}
+Sunset: {sunset}
+delta: {frame_time:0.2f} seconds
+'''.format(sunrise=sunrise, sunset=sunset, frame_time=frame_time/1000)
+  print description
+
   time.sleep(sleep_time)
+  
+  send_email('Starting time-lapse \n {}'.format(description))
+  
   # time.sleep(1)
   
 
@@ -216,9 +254,10 @@ if __name__ == '__main__':
 
   youtube = get_authenticated_service(args)
   try:
-    initialize_upload(youtube, args)
+    initialize_upload(youtube, args, description)
   except HttpError, e:
     print "An HTTP error %d occurred:\n%s" % (e.resp.status, e.content)
 
   os.remove(H264_FILENAME)
-  os.remove(MP4_FILENAME)
+  # os.remove(MP4_FILENAME)
+  os.rename(MP4_FILENAME, MP4_FILENAME.replace('todays','previous'))
