@@ -1,0 +1,13 @@
+#!/bin/bash
+
+pushd /home/ajmendez/tmp/timelapse/ > /dev/null
+
+
+
+echo '--------'
+date
+echo 'Start' > /tmp/timelapse.log
+date >> /tmp/timelapse.log
+/usr/bin/python -u /home/ajmendez/dev/pirmac/time_lapse_upload.py >> /tmp/timelapse.log 2>&1 &
+
+popd > /dev/null
