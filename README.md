@@ -1,4 +1,4 @@
-pirmac
-======
+timerasp
+========
 
-Pi IR Camera Fun
+Rebranded Raspberry pi camera with python.
