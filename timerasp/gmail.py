@@ -4,19 +4,25 @@ http://stackoverflow.com/questions/11445523/python-smtplib-is-sending-mail-via-g
 
 '''
 import time
-import smtplib
 import xoauth
+import socket
+import smtplib
+import calendar
 from pymendez import auth
+from datetime import datetime
+
 
 TEMPLATE = '''To:{address}
 From: {email}
-Subject:Notification of Time-lapse
+Subject:{subject}
 
-{note}
+{message}
+
+{info}
 
 '''
 
-def send_email(note):
+def send_email(subject, message, addinfo=True):
     email, address, oauth_token, oauth_token_secret = auth('gmail', ['email','address', 'oauth_token', 'oauth_token_secret'])
 
     consumer = xoauth.OAuthEntity('anonymous', 'anonymous')
@@ -26,16 +32,21 @@ def send_email(note):
                         str(xoauth.random.randrange(2**64 - 1)), str(int(time.time())))
 
     smtp_conn = smtplib.SMTP('smtp.gmail.com', 587)
-    smtp_conn.set_debuglevel(True)
+    # smtp_conn.set_debuglevel(True)
     smtp_conn.ehlo()
     smtp_conn.starttls()
     smtp_conn.ehlo()
     smtp_conn.docmd('AUTH', 'XOAUTH ' + xoauth.base64.b64encode(xoauth_string))
-
-    msg = TEMPLATE.format(address=address, email=email, note=note)
+    
+    if addinfo:
+        info = '{} : {} : {}'.format(socket.gethostname(), calendar.timegm(time.gmtime()), datetime.now())
+    else:
+        info = ''
+        
+    msg = TEMPLATE.format(address=address, email=email, subject=subject, message=message, info=info)
     smtp_conn.sendmail(email, address, msg)
     
 
 
 if __name__ == '__main__':
-    send_email('gmail.py test')
+    send_email('email test', 'body')
