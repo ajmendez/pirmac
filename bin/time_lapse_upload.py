@@ -1,22 +1,21 @@
 #!/usr/bin/python
 
-import httplib
-import httplib2
 import os
-import random
 import sys
 import time
 import ephem
+import random
+import httplib
+import httplib2
 import datetime
-
-from gmail import send_email
+from timerasp import gmail, flickr
 
 from apiclient.discovery import build
+from oauth2client.file import Storage
 from apiclient.errors import HttpError
 from apiclient.http import MediaFileUpload
-from oauth2client.client import flow_from_clientsecrets
-from oauth2client.file import Storage
 from oauth2client.tools import argparser, run_flow
+from oauth2client.client import flow_from_clientsecrets
 
 
 # Explicitly tell the underlying HTTP transport library not to retry, since
@@ -83,7 +82,7 @@ def get_authenticated_service(args):
     scope=YOUTUBE_UPLOAD_SCOPE,
     message=MISSING_CLIENT_SECRETS_MESSAGE)
 
-  storage = Storage("%s-oauth2.json" % sys.argv[0])
+  storage = Storage(os.path.expanduser('~/.limited/youtube-oauth2.json'))
   credentials = storage.get()
 
   if credentials is None or credentials.invalid:
@@ -92,12 +91,12 @@ def get_authenticated_service(args):
   return build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION,
     http=credentials.authorize(httplib2.Http()))
 
-def initialize_upload(youtube, options, description):
+def initialize_upload(youtube, options, title, description):
   tags = None
 
   body=dict(
     snippet=dict(
-      title=datetime.datetime.today().strftime("%Y-%m-%d"),
+      title=title,
       description=description,
       tags="timelapse,balitmore",
       categoryId=""
@@ -193,13 +192,22 @@ def datetime_to_timestamp(dt):
 #               tags =['IR','timelapse', 'movie'],
 #               ispublic=True)
 
+def getarg(item):
+    ISITEM = (item in sys.argv)
+    if ISITEM:
+        sys.argv.pop(sys.argv.index(item))
+    return ISITEM
 
 
 if __name__ == '__main__':
-  START = ('start' in sys.argv)
-  if START: sys.argv.pop(sys.argv.index('start'))
+  START = getarg('start')
+  DEBUG = getarg('debug')
+  # Parse everything else
+  sys.argv.append('--noauth_local_webserver')
   args = argparser.parse_args()
 
+  
+  
   now = datetime.datetime.now()
   here = ephem.Observer()
   here.lon, here.lat = '-76.623434', '39.331628'
@@ -209,55 +217,70 @@ if __name__ == '__main__':
   time_before = datetime.timedelta(minutes=60)
   time_after = datetime.timedelta(minutes=60)
   sunrise = ephem.localtime(sunrise) - time_before
-  sunset = ephem.localtime(sunset) + time_after
-
-
-
-
-
   if START:sunrise = now
+  sunset = ephem.localtime(sunset) + time_after
 
   video_length = (sunset - sunrise).total_seconds() * 1000
   total_frames = 120 * 60
   frame_time = video_length / total_frames
-
-  RECORD_COMMAND = "raspiyuv -awb off -ex verylong -h 1072 -w 1920 -t %(length)d -tl %(slice)d -o - | %(dir)s/rpi-encode-yuv > %(file)s"
-  cmd = RECORD_COMMAND % {"length": video_length, "slice": frame_time, "file": H264_FILENAME, 'dir':openmax_dir}
-  print('Record Command:\n {}'.format(cmd))
-
   sleep_time = (sunrise - now).total_seconds()
-
-  print("Sleeping for %d seconds" % sleep_time)
-
+  
+  
+  title = 'IR '+datetime.datetime.today().strftime("%Y-%m-%d")
   description='''IR timelapse from a Raspberry PI
 
-Sunrise: {sunrise}
-Sunset: {sunset}
-delta: {frame_time:0.2f} seconds
-'''.format(sunrise=sunrise, sunset=sunset, frame_time=frame_time/1000)
-  print description
+  Sunrise: {sunrise}
+  Sunset: {sunset}
+  delta: {frame_time:0.2f} seconds
+  '''.format(sunrise=sunrise, sunset=sunset, frame_time=frame_time/1000)
+  
+  
+  if DEBUG:
+      sleep_time = 2
+      frame_time = 3 # every 3 seconds -- simple and quick
+      video_length = 16*1000 # for 13 seconds
+  
+  
+  RECORD_COMMAND = "raspiyuv -awb off -ex verylong -h 1072 -w 1920 -t %(length)d -tl %(slice)d -o - | %(dir)s/rpi-encode-yuv > %(file)s"
+  cmd = RECORD_COMMAND % {"length": video_length, "slice": frame_time, "file": H264_FILENAME, 'dir':openmax_dir}
+  CONVERT_COMMAND = "MP4Box -fps 24 -add %(in_file)s %(out_file)s"
+  cmd2 = CONVERT_COMMAND % {"in_file": H264_FILENAME, "out_file": MP4_FILENAME}
+
+  
+  print('Record Command:\n {}'.format(cmd))
+  print("  Sleeping for %d seconds" % sleep_time)
+  print("  Video Description: {}".format(description))
 
   time.sleep(sleep_time)
-  
-  send_email('Starting time-lapse \n {}'.format(description))
-  
-  # time.sleep(1)
-  
-
-  
+  gmail.send_email('Chronos : Timelapse',
+                   'Starting time-lapse \n {}'.format(description))
   os.system(cmd)
-
-  os.system("MP4Box -fps 24 -add %(in_file)s %(out_file)s" % {"in_file": H264_FILENAME, "out_file": MP4_FILENAME})
-
+  os.system(cmd2)
+  
+  
   if not os.path.exists(MP4_FILENAME):
     exit("No video to upload")
-
+    gmail.send_email('Chronos : Timelapse Failure',
+                     'Failed to find Mp4')
+  
+  # youtube upload
   youtube = get_authenticated_service(args)
   try:
-    initialize_upload(youtube, args, description)
-  except HttpError, e:
+    initialize_upload(youtube, args, title, description)
+  except HttpError as e:
     print "An HTTP error %d occurred:\n%s" % (e.resp.status, e.content)
-
+    gmail.send_email('Chronos : Timelapse Failure',
+                     'Failed to upload to youtube:\n{}'.format(e))
+ 
+  # flickr upload
+  try:
+    print flickr.upload(MP4_FILENAME, title, description, '"Raspberry Pi" IR timelapse timerasp JHU Baltimore Maryland')
+  except Exception as e:
+    gmail.send_email('Chronos : Timelapse Failure',
+                     'Failed to upload to flickr:\n{}'.format(e))
+  
+  # clean up
   os.remove(H264_FILENAME)
   # os.remove(MP4_FILENAME)
   os.rename(MP4_FILENAME, MP4_FILENAME.replace('todays','previous'))
+  gmail.send_email('Chronos : Timelapse Success!','Everything is good!')

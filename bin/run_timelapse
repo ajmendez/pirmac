@@ -2,12 +2,15 @@
 
 pushd /home/ajmendez/tmp/timelapse/ > /dev/null
 
+export PYTHONPATH=/home/ajmendez/dev/timerasp:/home/ajmendez/dev/pymendez:/home/ajmendez/dev/scintillate:/home/ajmendez/usr/local/lib/python2.7/site-packages:
+
+export PATH=/home/ajmendez/dev/scintillate/bin:/home/ajmendez/bin:/home/ajmendez/dev/scintillate/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/games:/usr/games
 
 
 echo '--------'
 date
 echo 'Start' > /tmp/timelapse.log
 date >> /tmp/timelapse.log
-/usr/bin/python -u /home/ajmendez/dev/pirmac/time_lapse_upload.py >> /tmp/timelapse.log 2>&1 &
+/usr/bin/python -u /home/ajmendez/dev/pirmac/time_lapse_upload.py $1 >> /tmp/timelapse.log 2>&1 &
 
 popd > /dev/null
