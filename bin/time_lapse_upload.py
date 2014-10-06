@@ -250,7 +250,12 @@ if __name__ == '__main__':
   print('Record Command:\n {}'.format(cmd))
   print("  Sleeping for %d seconds" % sleep_time)
   print("  Video Description: {}".format(description))
-
+  
+  if DEBUG:
+      sys.exit()
+  gmail.send_email('Chronos : Start in {}'.format(sleep_time),
+                   'Time-lapse \n {}'.format(description))
+  
   time.sleep(sleep_time)
   gmail.send_email('Chronos : Timelapse',
                    'Starting time-lapse \n {}'.format(description))
