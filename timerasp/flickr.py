@@ -38,14 +38,14 @@ class file_with_callback(file):
 
 
 
-def upload(filename, title, description, tags):
+def upload(filename, title, description, tags, public=False):
     x = api.Flickr().flickr
     arguments = {'auth_token': x.token_cache.token, 
                  'api_key': x.api_key,
                  'title':title,
                  'description':description,
                  'tags':tags,
-                 'is_public':'0'}
+                 'is_public':'1' if public else '0'}
     kwargs = flickrapi.make_utf8(arguments)
     kwargs['api_sig'] = x.sign(kwargs)
     url = "https://%s%s" % (x.flickr_host, x.flickr_upload_form)

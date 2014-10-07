@@ -279,7 +279,9 @@ if __name__ == '__main__':
  
   # flickr upload
   try:
-    print flickr.upload(MP4_FILENAME, title, description, '"Raspberry Pi" IR timelapse timerasp JHU Baltimore Maryland')
+    print flickr.upload(MP4_FILENAME, title, description, 
+                        '"Raspberry Pi" IR timelapse timerasp JHU Baltimore Maryland',
+                        public=True)
   except Exception as e:
     gmail.send_email('Chronos : Timelapse Failure',
                      'Failed to upload to flickr:\n{}'.format(e))
