@@ -44,10 +44,11 @@ class Camera(object):
     
     def setup(self, auto=False):
         self.cam.resolution = RESOLUTION
-        self.cam.image_effect = ''
+        self.cam.image_effect = 'none'
         self.cam.iso = 100
         self.cam.led = False
         self.cam.meter_mode = 'average'
+        self.cam.image_denoise = True
         if auto:
             self.cam.exposure_mode = 'auto'
             self.cam.shutter_speed = 0
@@ -94,8 +95,10 @@ class Camera(object):
     
     
     def capture(self, annotate):
-        self.cam.exif_tags['IFD0.Artist'] = ''
-        self.cam.exif_tags['IFD0.Copyright'] = ''
+        self.cam.exif_tags['IFD0.Artist'] = 'Mendez'
+        self.cam.exif_tags['IFD0.Copyright'] = 'Copyright (c) 2014 timerasp'
+        self.cam.exif_tags['EXIF.UserComment'] = ''
+        
         self.cam.annotate_bg = True
         self.cam.annotate_text = dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         return self.cam.capture()
