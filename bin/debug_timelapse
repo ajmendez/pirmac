@@ -1,0 +1,59 @@
+#!/usr/bin/env python
+
+# from timerasp import camera
+import os
+import picamera
+from PIL import Image
+from time import sleep
+from datetime import datetime
+
+with picamera.PiCamera() as camera:
+    camera.resolution = (1280, 720)
+    # camera.resolution = (1920, 1080)
+    camera.framerate = 12
+    camera.start_preview()
+
+    # Load the arbitrarily sized image
+    # img = Image.open(os.path.expanduser('~/ocr_pi.png'))
+    
+    camera.annotate_bg = True
+    camera.annotate_text = 'Hello world!'
+    camera.annotate_frame_num = True
+    
+    
+    # Create an image padded to the required size with
+    # mode 'RGB'
+    # pad = Image.new('RGB', (
+    #     (img.size[0] + 31 // 32) * 32,
+    #     (img.size[1] + 15 // 16) * 16,
+    #     ))
+    # # Paste the original image into the padded one
+    # pad.paste(img, (0, 0))
+
+    # Add the overlay with the padded image as the source,
+    # but the original image's dimensions
+    # o = camera.add_overlay(pad.tostring(), size=img.size)
+    # By default, the overlay is in layer 0, beneath the
+    # preview (which defaults to layer 2). Here we make
+    # the new overlay semi-transparent, then move it above
+    # the preview
+    # o.alpha = 128
+    # o.layer = 3
+
+    # Wait indefinitely until the user terminates the script
+    while True:
+        sleep(0.5)
+        test = '{} {}'.format(datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                              map(float, camera.awb_gains),
+                              )
+        camera.annotate_text = test
+        
+
+# def debug():
+#     cam = camera.Camera()
+#     cam.preview()
+#
+#
+#
+# if __name__ == '__main__':
+#     debug()
