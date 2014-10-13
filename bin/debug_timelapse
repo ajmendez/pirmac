@@ -3,11 +3,18 @@
 # from timerasp import camera
 import os
 import picamera
+import collections
+import numpy as np
 from PIL import Image
 from time import sleep
 from datetime import datetime
 
 with picamera.PiCamera() as camera:
+    camera.iso = 100
+    # camera.iso = 200
+    # camera.led = False
+    # camera.drc_strength = 'high'
+    camera.exposure_mode = 'verylong'
     camera.resolution = (1280, 720)
     # camera.resolution = (1920, 1080)
     camera.framerate = 12
@@ -16,7 +23,7 @@ with picamera.PiCamera() as camera:
     # Load the arbitrarily sized image
     # img = Image.open(os.path.expanduser('~/ocr_pi.png'))
     
-    camera.annotate_bg = True
+    # camera.annotate_bg = True
     camera.annotate_text = 'Hello world!'
     camera.annotate_frame_num = True
     
@@ -40,14 +47,21 @@ with picamera.PiCamera() as camera:
     # o.alpha = 128
     # o.layer = 3
 
+    # shutter = collections.deque(maxlen=10)
+
+
     # Wait indefinitely until the user terminates the script
     while True:
         sleep(0.5)
-        test = '{} {}'.format(datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                              map(float, camera.awb_gains),
+        test = '{} {} {}'.format(datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                              ' '.join(map(lambda x: '{:0.2f}'.format(float(x)), camera.awb_gains)),
+                              '{:0.2f}'.format(camera.exposure_speed),
                               )
         camera.annotate_text = test
-        
+        # shutter.append(camera.exposure_speed)
+        # camera.exposure_mode = 'auto'
+        # camera.shutter_speed = 0
+        print camera.shutter_speed, camera.exposure_speed
 
 # def debug():
 #     cam = camera.Camera()
