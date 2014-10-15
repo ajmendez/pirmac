@@ -73,12 +73,12 @@ class Camera(object):
         tmp = map(self.limitawb, tmp)
         return tuple(tmp)
     
-    def setup(self, first=False, auto=False):
+    def setup(self, first=False, auto=True):
         if first:
             self.cam.framerate = 24
             self.cam.resolution = RESOLUTION
             self.cam.image_effect = 'none'
-            self.cam.iso = 300
+            self.cam.iso = 0
             # self.cam.led = False handled by /boot/config.txt
             self.cam.meter_mode = 'average'
             self.cam.image_denoise = True
@@ -104,11 +104,13 @@ class Camera(object):
         
     
     def label(self):
-        label='{0:} {1:,} {2[0]:0.2f} {2[1]:0.2f}'.format(self.cam.iso, 
+        label='{0:} {1:,} {2[0]:0.2f} {2[1]:0.2f} {3:0.2f} {4:0.2f}'.format(self.cam.iso, 
                                 self.cam.exposure_speed, 
-                                map(float, self.cam.awb_gains))
+                                map(float, self.cam.awb_gains),
+                                float(self.cam.analog_gain),
+                                float(self.cam.digital_gain))
         self.cam.annotate_text = datetime.now().strftime('%H:%M:%S') + ' '+ label
-    
+        self.cam.annotate_frame_num=True
     def smoothcap(self):
         ''' Generate a series of images that have a smooth
         ramping of white balance, and exposure.  Procedure is 
@@ -120,27 +122,40 @@ class Camera(object):
         with picamera.array.PiRGBArray(self.cam) as stream:
             while True:
                 # Capture test image
-                self.setup(auto=True)
+                self.setup()
                 self._cap(stream)
-                # self.capture()
                 self.update()
         
                 # capture real image
-                self.setup()
-                # self._cap(stream)
+                self.setup(auto=False)
+                self._cap(stream)
                 print map(float,self.cam.awb_gains), self.cam.exposure_speed
-                image = self.capture(annotate=True)
-                yield image
+                yield stream
     
+    def smoothcap2(self):
+        k = 0
+        while True:
+            # Capture test image
+            self.setup()
+            self.capture()
+            self.update()
     
+            # capture real image
+            self.setup(auto=True)
+            print k, map(float,self.cam.awb_gains), self.cam.exposure_speed
+            filename = '/home/pi/tmp/cap/image_{:04d}.jpg'.format(k)
+            image = self.capture(filename=filename, annotate=True)
+            yield image
+            k += 1
+        
     
     def _cap(self, stream):
-        stream.seek(0)
         self.label()
         self.cam.capture(stream, 'rgb')
+        stream.seek(0)
     
     
-    def capture(self, annotate=False):
+    def capture(self, filename='/dev/null', annotate=False):
         self.cam.exif_tags['IFD0.Artist'] = 'Mendez'
         self.cam.exif_tags['IFD0.Copyright'] = 'Copyright (c) 2014 timerasp'
         self.cam.exif_tags['EXIF.UserComment'] = ''
@@ -151,13 +166,13 @@ class Camera(object):
         #     self.cam.annotate_text = '{}: {}'.format(datetime.now().strftime('%H:%M:%S'), annotate)
         if annotate:
             self.label()
-        # self.cam.capture('/home/pi/tmp/cap/image.jpg')
+        self.cam.capture(filename, format='jpeg')
         # return None
-        stream = io.BytesIO()
-        self.cam.capture(stream, format='jpeg')
-        stream.seek(0)
-        image = Image.open(stream)
-        return image
+        # stream = io.BytesIO()
+        # self.cam.capture(stream, format='jpeg')
+        # stream.seek(0)
+        # image = Image.open(stream)
+        # return image
     
     def stream(self):
         with picamera.array.PiRGBArray(self.cam) as stream:
