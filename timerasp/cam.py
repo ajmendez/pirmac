@@ -13,6 +13,10 @@ from PIL import Image
 from scipy import interpolate 
 from datetime import datetime
 
+
+# from fractions import Fraction
+# picamera.camera.Fraction = Fraction
+
 AUTORESOLUTION = (640,480)
 # RESOLUTION = (640,480)
 RESOLUTION = (1280, 720)
@@ -28,12 +32,13 @@ class Camera(object):
         self.setup(first=True)
         if preview:
             self.cam.start_preview()
+            self.cam.preview.fullscreen=True
         
         
     
     def __enter__(self):
         self.setup()
-        print 'wait time for camera: 1 second(s)'
+        # print 'wait time for camera: 1 second(s)'
         # time.sleep(1)
         return self
     
@@ -50,12 +55,12 @@ class Camera(object):
             tmp = interpolate.interp1d(np.arange(npts), array)
             # tmp = interpolate.UnivariateSpline(np.arange(npts), array)
             # tmp = interpolate.InterpolatedUnivariateSpline(np.arange(npts), array)
-            out = tmp(npts-1)
+            out = float(tmp(npts-1))
             return out
     
     def getshutter(self):
         tmp = (self.getnext(self.shutter))
-        print ','.join(map('{:0.1f}'.format, self.shutter)), ': ', tmp
+        # print ','.join(map('{:0.1f}'.format, self.shutter)), ': ', tmp
         return int(tmp)
     
     def limitawb(self, val):
@@ -64,34 +69,37 @@ class Camera(object):
         else:         return val
     
     def getawb(self):
-        return map(self.limitawb, map(self.getnext, [self.red, self.blue]))
+        tmp = map(self.getnext, [self.red, self.blue])
+        tmp = map(self.limitawb, tmp)
+        return tuple(tmp)
     
     def setup(self, first=False, auto=False):
         if first:
+            self.cam.framerate = 24
             self.cam.resolution = RESOLUTION
             self.cam.image_effect = 'none'
-            self.cam.iso = 100
+            self.cam.iso = 300
             # self.cam.led = False handled by /boot/config.txt
             self.cam.meter_mode = 'average'
             self.cam.image_denoise = True
         
         if auto:
             # self.cam.resolution = AUTORESOLUTION
-            self.cam.exposure_mode = 'auto'
+            self.cam.exposure_mode = 'verylong'
             self.cam.shutter_speed = 0
             self.cam.awb_mode = 'auto'
         else:
             # self.cam.resolution = RESOLUTION
-            # self.cam.awb_mode = 'off'
-            # self.cam.awb_gains = self.getawb()
+            self.cam.awb_mode = 'off'
+            self.cam.awb_gains = self.getawb()
             self.cam.exposure_mode = 'off'
             self.cam.shutter_speed = self.getshutter()
     
     def update(self):
         exp = self.cam.exposure_speed
-        # r,b = self.cam.awb_gains
-        # self.red.append(float(r))
-        # self.blue.append(float(b))
+        r,b = self.cam.awb_gains
+        self.red.append(float(r))
+        self.blue.append(float(b))
         self.shutter.append(exp)
         
     
@@ -113,40 +121,43 @@ class Camera(object):
             while True:
                 # Capture test image
                 self.setup(auto=True)
-                # time.sleep(2)
-                stream.seek(0)
-                self.label()
-                self.cam.capture(stream, 'rgb')
+                self._cap(stream)
+                # self.capture()
                 self.update()
         
                 # capture real image
                 self.setup()
-                stream.seek(0)
-                self.label()
-                self.cam.capture(stream, 'rgb')
-                yield None
+                # self._cap(stream)
+                print map(float,self.cam.awb_gains), self.cam.exposure_speed
+                image = self.capture(annotate=True)
+                yield image
     
     
     
+    def _cap(self, stream):
+        stream.seek(0)
+        self.label()
+        self.cam.capture(stream, 'rgb')
     
     
-    
-    def capture(self, annotate=None):
+    def capture(self, annotate=False):
         self.cam.exif_tags['IFD0.Artist'] = 'Mendez'
         self.cam.exif_tags['IFD0.Copyright'] = 'Copyright (c) 2014 timerasp'
         self.cam.exif_tags['EXIF.UserComment'] = ''
         
         
         # self.cam.annotate_bg = True
-        if annotate is not None:
-            self.cam.annotate_text = '{}: {}'.format(datetime.now().strftime('%H:%M:%S'), annotate)
-        self.cam.capture('/dev/null', format='rgb')
-        return None
-        # stream = io.BytesIO()
-        # self.cam.capture(stream, format='jpeg')
-        # stream.seek(0)
-        # image = Image.open(stream)
-        # return image
+        # if annotate is not None:
+        #     self.cam.annotate_text = '{}: {}'.format(datetime.now().strftime('%H:%M:%S'), annotate)
+        if annotate:
+            self.label()
+        # self.cam.capture('/home/pi/tmp/cap/image.jpg')
+        # return None
+        stream = io.BytesIO()
+        self.cam.capture(stream, format='jpeg')
+        stream.seek(0)
+        image = Image.open(stream)
+        return image
     
     def stream(self):
         with picamera.array.PiRGBArray(self.cam) as stream:

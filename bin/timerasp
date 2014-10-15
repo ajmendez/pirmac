@@ -3,18 +3,21 @@
 2014 Mendez
 '''
 import sys
-from timerasp import camera
+from timerasp import cam
 
 PREVIEW = ('preview' in sys.argv)
 
 
 def timelapse():
-    with camera.Camera(preview=PREVIEW) as cam:
-        for image in cam.smoothcap():
+    with cam.Camera(preview=PREVIEW) as c:
+        for image in c.smoothcap():
             print type(image)
 
 
 
 
 if __name__ == '__main__':
+    from pysurvey.util import setup_stop
+    setup_stop()
+    
     timelapse()
