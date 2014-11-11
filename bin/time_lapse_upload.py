@@ -3,11 +3,14 @@
 import os
 import sys
 import time
+import json
 import ephem
 import random
+import socket
 import httplib
 import httplib2
 import datetime
+import calendar
 from timerasp import gmail, flickr
 
 from apiclient.discovery import build
@@ -17,6 +20,9 @@ from apiclient.http import MediaFileUpload
 from oauth2client.tools import argparser, run_flow
 from oauth2client.client import flow_from_clientsecrets
 
+
+
+# ephem, httplib2, flickrapi, exifread, poster, apiclient, urllib3
 
 # Explicitly tell the underlying HTTP transport library not to retry, since
 # we are handling retry logic ourselves.
@@ -45,7 +51,7 @@ RETRIABLE_STATUS_CODES = [500, 502, 503, 504]
 #   https://developers.google.com/youtube/v3/guides/authentication
 # For more information about the client_secrets.json file format, see:
 #   https://developers.google.com/api-client-library/python/guide/aaa_client_secrets
-CLIENT_SECRETS_FILE = os.path.expanduser("~/tmp/timelapse/client_secrets.json")
+CLIENT_SECRETS_FILE = os.path.expanduser("~/.limited/client_secrets.json")
 
 # This OAuth 2.0 access scope allows an application to upload files to the
 # authenticated user's YouTube channel, but doesn't allow other types of access.
@@ -77,6 +83,9 @@ H264_FILENAME = os.path.expanduser("~/tmp/timelapse/todays_video.h264")
 
 MP4_FILENAME = os.path.expanduser("~/tmp/timelapse/todays_video.mp4")
 
+DAILY_FILENAME = os.path.expanduser("~/tmp/timelapse/%d.mp4"%calendar.timegm(time.gmtime()))
+
+
 def get_authenticated_service(args):
   flow = flow_from_clientsecrets(CLIENT_SECRETS_FILE,
     scope=YOUTUBE_UPLOAD_SCOPE,
@@ -98,7 +107,7 @@ def initialize_upload(youtube, options, title, description):
     snippet=dict(
       title=title,
       description=description,
-      tags="timelapse,balitmore",
+      tags="timelapse,maryland",
       categoryId=""
     ),
     status=dict(
@@ -202,6 +211,11 @@ def getarg(item):
 if __name__ == '__main__':
   START = getarg('start')
   DEBUG = getarg('debug')
+  OFFLINE = getarg('offline')
+  HOUR = getarg('hour')
+  FRAME = getarg('frame')
+  NIGHT = getarg('night')
+  
   # Parse everything else
   sys.argv.append('--noauth_local_webserver')
   args = argparser.parse_args()
@@ -217,22 +231,55 @@ if __name__ == '__main__':
   time_before = datetime.timedelta(minutes=60)
   time_after = datetime.timedelta(minutes=60)
   sunrise = ephem.localtime(sunrise) - time_before
-  if START:sunrise = now
+  if START:
+    sunrise = now
+  else:
+    if sunrise > ephem.localtime(sunset):
+      sunrise = now
   sunset = ephem.localtime(sunset) + time_after
+  
+  if HOUR:
+    sunset = sunrise + datetime.timedelta(minutes=60)
+  
+  if NIGHT:
+      sunrise = datetime.datetime(now.year, now.month, now.day, 20)
+      sunset = sunrise + datetime.timedelta(hours=6)
+      if sunrise < now:
+          sunrise = now
+  
 
   video_length = (sunset - sunrise).total_seconds() * 1000
   total_frames = 120 * 60
   frame_time = video_length / total_frames
+  if FRAME:
+      frame_time = 25
   sleep_time = (sunrise - now).total_seconds()
   
   
-  title = 'IR '+datetime.datetime.today().strftime("%Y-%m-%d")
-  description='''IR timelapse from a Raspberry PI
-
+  title = 'Optical '+datetime.datetime.today().strftime("%Y-%m-%d")
+  hostname = socket.gethostname()
+  description='''Optical timelapse from a Raspberry PI
+  
+  Hostname: {hostname}
   Sunrise: {sunrise}
   Sunset: {sunset}
   delta: {frame_time:0.2f} seconds
-  '''.format(sunrise=sunrise, sunset=sunset, frame_time=frame_time/1000)
+  '''.format(sunrise=sunrise, sunset=sunset, frame_time=frame_time/1000, hostname=hostname)
+  
+  
+  output = dict(
+      sunrise='%s'%sunrise,
+      sunset='%s'%sunset,
+      runtime=calendar.timegm(time.gmtime()),
+      frame_time=frame_time/1000.0,
+      video_length=video_length,
+      sleep_time=sleep_time,
+      title=title,
+      description=description,
+      hostname=hostname,
+  )
+  json.dump(output, open(DAILY_FILENAME.replace('.mp4','.json'),'a'), indent=2)
+  
   
   
   if DEBUG:
@@ -240,54 +287,76 @@ if __name__ == '__main__':
       frame_time = 3 # every 3 seconds -- simple and quick
       video_length = 16*1000 # for 13 seconds
   
+  if NIGHT:
+      extra = '-ss 20000000 -ISO 1600 -ex verylong'
+  else:
+      extra = ''
   
-  RECORD_COMMAND = "raspiyuv -awb off -ex verylong -h 1072 -w 1920 -t %(length)d -tl %(slice)d -o - | %(dir)s/rpi-encode-yuv > %(file)s"
-  cmd = RECORD_COMMAND % {"length": video_length, "slice": frame_time, "file": H264_FILENAME, 'dir':openmax_dir}
+  #-awb auto -ex verylong
+  RECORD_COMMAND = "raspiyuv %(extra)s -h 1072 -w 1920 -t %(length)d -tl %(slice)d -o - | %(dir)s/rpi-encode-yuv > %(file)s"
+  cmd = RECORD_COMMAND % {"length": video_length,
+                          "slice": frame_time,
+                          "file": H264_FILENAME,'dir':openmax_dir,"extra":extra}
   CONVERT_COMMAND = "MP4Box -fps 24 -add %(in_file)s %(out_file)s"
   cmd2 = CONVERT_COMMAND % {"in_file": H264_FILENAME, "out_file": MP4_FILENAME}
-
+  RSYNC_COMMAND = 'rsync -ravpP %(in_file)s %(out_file)s'
+  cmd3 = RSYNC_COMMAND % {'in_file':MP4_FILENAME, 'out_file':DAILY_FILENAME}
   
   print('Record Command:\n {}'.format(cmd))
   print("  Sleeping for %d seconds" % sleep_time)
   print("  Video Description: {}".format(description))
   
-  if DEBUG:
-      sys.exit()
-  gmail.send_email('Chronos : Start in {}'.format(sleep_time),
-                   'Time-lapse \n {}'.format(description))
+  
+  if not OFFLINE:
+      try:
+          gmail.send_email(hostname+' : Start in {}'.format(sleep_time),
+                          'Time-lapse \n {}'.format(description))
+      except:
+          print 'Failed to email'
   
   time.sleep(sleep_time)
-  gmail.send_email('Chronos : Timelapse',
-                   'Starting time-lapse \n {}'.format(description))
+  if not OFFLINE:
+      try:
+          gmail.send_email(hostname+' : Timelapse',
+                      'Starting time-lapse \n {}'.format(description))
+      except:
+          print 'failed to email'
+    
   os.system(cmd)
   os.system(cmd2)
+  os.system(cmd3)
+  
+  if DEBUG:
+      sys.exit()
   
   
-  if not os.path.exists(MP4_FILENAME):
-    exit("No video to upload")
-    gmail.send_email('Chronos : Timelapse Failure',
-                     'Failed to find Mp4')
+  if not OFFLINE:
+      if not os.path.exists(MP4_FILENAME):
+        exit("No video to upload")
+        gmail.send_email(hostname+' : Timelapse Failure',
+                         'Failed to find Mp4')
   
-  # youtube upload
-  youtube = get_authenticated_service(args)
-  try:
-    initialize_upload(youtube, args, title, description)
-  except HttpError as e:
-    print "An HTTP error %d occurred:\n%s" % (e.resp.status, e.content)
-    gmail.send_email('Chronos : Timelapse Failure',
-                     'Failed to upload to youtube:\n{}'.format(e))
+      # youtube upload
+      youtube = get_authenticated_service(args)
+      try:
+        initialize_upload(youtube, args, title, description)
+      except HttpError as e:
+        print "An HTTP error %d occurred:\n%s" % (e.resp.status, e.content)
+        gmail.send_email(hostname+' : Timelapse Failure',
+                         'Failed to upload to youtube:\n{}'.format(e))
  
-  # flickr upload
-  try:
-    print flickr.upload(MP4_FILENAME, title, description, 
-                        '"Raspberry Pi" IR timelapse timerasp JHU Baltimore Maryland',
-                        public=True)
-  except Exception as e:
-    gmail.send_email('Chronos : Timelapse Failure',
-                     'Failed to upload to flickr:\n{}'.format(e))
+      # flickr upload
+      try:
+        print flickr.upload(MP4_FILENAME, title, description, 
+                            '"Raspberry Pi" IR timelapse timerasp JHU Baltimore Maryland',
+                            public=True)
+      except Exception as e:
+        gmail.send_email(hostname+' : Timelapse Failure',
+                         'Failed to upload to flickr:\n{}'.format(e))
   
   # clean up
   os.remove(H264_FILENAME)
   # os.remove(MP4_FILENAME)
   os.rename(MP4_FILENAME, MP4_FILENAME.replace('todays','previous'))
-  gmail.send_email('Chronos : Timelapse Success!','Everything is good!')
+  if not OFFLINE:
+    gmail.send_email(hostname+' : Timelapse Success!','Everything is good!')

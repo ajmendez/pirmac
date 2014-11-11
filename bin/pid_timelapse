@@ -1,0 +1,43 @@
+#!/bin/bash
+
+PIDFILE=/tmp/timelapse.pid
+
+source /home/pi/.bashrc
+
+export PATH=$HOME/dev/scintillate/bin:$PATH
+export PYTHONPATH="$HOME/dev/scintillate:${PYTHONPATH}"
+
+export PYTHONPATH="$HOME/dev/pymendez:${PYTHONPATH}"
+export PYTHONPATH="$HOME/dev/pysurvey:${PYTHONPATH}"
+export PYTHONPATH="$HOME/dev/timerasp:${PYTHONPATH}"
+export PYTHONPATH="$HOME/dev/picamera:${PYTHONPATH}"
+
+START=0
+if [ -e "$PIDFILE" ]; then
+    PID="$(cat $PIDFILE)"
+    if ! ps -p $PID > /dev/null ; then
+        # last process is not around
+        echo "Clean up from last process"
+        rm /tmp/timelapse.pid
+        START=1
+    else
+        echo -n '.'
+    fi
+else
+    START=1
+fi
+
+if [ $START -eq 1 ]; then
+    # echo "-------------"
+    # echo " $(date) : $(date +%s)"
+    # sleep 10 &
+    # echo $! > $PIDFILE
+    # echo "RUNNING!"
+    
+    echo "-------------"
+    echo " $(date) : $(date +%s)"
+    echo "> $(date) : $(date +%s)" > /tmp/timelapse.log
+    /usr/bin/python -u ~/dev/timerasp/bin/time_lapse_upload.py $1 >> /tmp/timelapse.log 2>&1 &
+    echo $! > $PIDFILE
+    echo "RUNNING!"
+fi
