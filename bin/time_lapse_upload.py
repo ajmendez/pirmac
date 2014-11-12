@@ -86,6 +86,8 @@ MP4_FILENAME = os.path.expanduser("~/tmp/timelapse/todays_video.mp4")
 DAILY_FILENAME = os.path.expanduser("~/tmp/timelapse/%d.mp4"%calendar.timegm(time.gmtime()))
 
 
+
+
 def get_authenticated_service(args):
   flow = flow_from_clientsecrets(CLIENT_SECRETS_FILE,
     scope=YOUTUBE_UPLOAD_SCOPE,
@@ -216,6 +218,12 @@ if __name__ == '__main__':
   FRAME = getarg('frame')
   NIGHT = getarg('night')
   
+  if NIGHT:
+      H264_FILENAME = H264_FILENAME.replace('todays','night')
+      MP4_FILENAME = MP4_FILENAME.replace('todays','night')
+  
+  
+  
   # Parse everything else
   sys.argv.append('--noauth_local_webserver')
   args = argparser.parse_args()
@@ -288,9 +296,10 @@ if __name__ == '__main__':
       video_length = 16*1000 # for 13 seconds
   
   if NIGHT:
-      extra = '-ss 20000000 -ISO 1600 -ex verylong'
+      extra = '-ss 10000000 -ISO 1600'
   else:
       extra = ''
+  
   
   #-awb auto -ex verylong
   RECORD_COMMAND = "raspiyuv %(extra)s -h 1072 -w 1920 -t %(length)d -tl %(slice)d -o - | %(dir)s/rpi-encode-yuv > %(file)s"
@@ -357,6 +366,10 @@ if __name__ == '__main__':
   # clean up
   os.remove(H264_FILENAME)
   # os.remove(MP4_FILENAME)
-  os.rename(MP4_FILENAME, MP4_FILENAME.replace('todays','previous'))
+  if NIGHT:
+      os.rename(MP4_FILENAME, MP4_FILENAME.replace('night','previous_night'))
+  else:
+      os.rename(MP4_FILENAME, MP4_FILENAME.replace('todays','previous'))
+  
   if not OFFLINE:
     gmail.send_email(hostname+' : Timelapse Success!','Everything is good!')
