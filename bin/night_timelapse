@@ -33,7 +33,7 @@ if [ $START -eq 1 ]; then
     echo "-------------"
     echo " $(date) : $(date +%s) NIGHT"
     echo "> $(date) : $(date +%s)" > $LOGFILE
-    /usr/bin/python -u ~/dev/timerasp/bin/time_lapse_upload.py night $1 >> $LOGFILE 2>&1 &
+    /usr/bin/python -u ~/dev/timerasp/bin/time_lapse_upload.py night frame $1 >> $LOGFILE 2>&1 &
     echo $! > $PIDFILE
     echo "RUNNING!"
 fi

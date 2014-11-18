@@ -224,7 +224,7 @@ if __name__ == '__main__':
   HOUR = getarg('hour')
   FRAME = getarg('frame')
   NIGHT = getarg('night')
-  
+  NORUN = getarg('norun')
   
   private = False
   if NIGHT:
@@ -271,7 +271,13 @@ if __name__ == '__main__':
       total_frames = 2 * 60 * 24
   frame_time = video_length / total_frames
   if FRAME:
-      frame_time = 25
+      frame_time = 12 * 1000
+  
+  # ensure some sort of sanity
+  min_frame_time = int(5.0*1000)
+  if frame_time < min_frame_time:
+      frame_time = min_frame_time
+  
   sleep_time = (sunrise - now).total_seconds()
   
   waveband = 'IR'
@@ -289,6 +295,10 @@ if __name__ == '__main__':
   '''.format(waveband=waveband, sunrise=sunrise, sunset=sunset, frame_time=frame_time/1000, 
              hostname=hostname, runtime=calendar.timegm(time.gmtime()))
   
+  if NORUN:
+      print("  Video title: {}".format(title))
+      print("  Video Description: {}".format(description))
+      sys.exit()
   
   output = dict(
       sunrise='%s'%sunrise,
@@ -340,6 +350,7 @@ if __name__ == '__main__':
   print("  Video Description: {}".format(description))
   
   
+  
   if not OFFLINE:
       try:
           gmail.send_email(hostname+' : Start in {} : {:0.1f}hr'.format(sleep_time,sleep_time/3600.),
@@ -356,6 +367,7 @@ if __name__ == '__main__':
           print 'failed to email'
     
   os.system(cmd)
+  description += '\n Captured Time: {}'.format(datetime.datetime.now())
   os.system(cmd2)
   os.system(cmd3)
   
