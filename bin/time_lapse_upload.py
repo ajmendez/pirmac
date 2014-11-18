@@ -113,8 +113,8 @@ def initialize_upload(youtube, options, title, description, private=True):
     snippet=dict(
       title=title,
       description=description,
-      tags="timelapse,maryland",
-      categoryId=""
+      tags="timerasp,timelapse,maryland,baltimore,JHU,raspberry pi",
+      categoryId="1"
     ),
     status=dict(
       privacyStatus=privacy,
@@ -154,8 +154,8 @@ def resumable_upload(insert_request):
         print "Video id '%s' was successfully uploaded." % response['id']
         return response['id']
       else:
-        exit("The upload failed with an unexpected response: %s" % response)
-        # raise ValueError("The upload failed with an unexpected response: %s" % response)
+        # exit("The upload failed with an unexpected response: %s" % response)
+        raise ValueError("The upload failed with an unexpected response: %s" % response)
     except HttpError, e:
       if e.resp.status in RETRIABLE_STATUS_CODES:
         error = "A retriable HTTP error %d occurred:\n%s" % (e.resp.status,
@@ -169,7 +169,8 @@ def resumable_upload(insert_request):
       print error
       retry += 1
       if retry > MAX_RETRIES:
-        exit("No longer attempting to retry.")
+        # exit("No longer attempting to retry.")
+        raise ValueError('No longer attempting to retry.')
 
       max_sleep = 2 ** retry
       sleep_seconds = random.random() * max_sleep
@@ -229,7 +230,7 @@ if __name__ == '__main__':
   if NIGHT:
       H264_FILENAME = H264_FILENAME.replace('todays','night')
       MP4_FILENAME = MP4_FILENAME.replace('todays','night')
-      private = True
+      # private = True
   
   
   # Parse everything else
@@ -255,7 +256,7 @@ if __name__ == '__main__':
   sunset = ephem.localtime(sunset) + time_after
   
   if HOUR:
-    sunset = sunrise + datetime.timedelta(minutes=2)
+    sunset = sunrise + datetime.timedelta(minutes=60)
   
   if NIGHT:
       sunrise = datetime.datetime(now.year, now.month, now.day, 22)
@@ -265,23 +266,27 @@ if __name__ == '__main__':
   
 
   video_length = (sunset - sunrise).total_seconds() * 1000
-  total_frames = 120 * 60
+  total_frames = 5 * 60 * 24
+  if NIGHT:
+      total_frames = 2 * 60 * 24
   frame_time = video_length / total_frames
   if FRAME:
       frame_time = 25
   sleep_time = (sunrise - now).total_seconds()
   
-  
-  title = 'IR '+datetime.datetime.today().strftime("%Y-%m-%d")
+  waveband = 'IR'
+  if NIGHT:
+      waveband = 'Night IR'
+  title = waveband+' '+datetime.datetime.today().strftime("%Y-%m-%d")
   hostname = socket.gethostname()
-  description='''Optical time-lapse video from a Raspberry PI
+  description='''{waveband} time-lapse video from a Raspberry PI
   
   Hostname: {hostname}
   Run Time: {runtime:d}
   Sunrise: {sunrise}
   Sunset: {sunset}
   delta: {frame_time:0.2f} seconds
-  '''.format(sunrise=sunrise, sunset=sunset, frame_time=frame_time/1000, 
+  '''.format(waveband=waveband, sunrise=sunrise, sunset=sunset, frame_time=frame_time/1000, 
              hostname=hostname, runtime=calendar.timegm(time.gmtime()))
   
   
@@ -313,7 +318,7 @@ if __name__ == '__main__':
   
   # backup if something went wrong.
   if os.path.exists(H264_FILENAME):
-      tmp = '{:d}.h264'.format(calendar.timegm(time.gmtime()))
+      tmp = '.{:d}.h264'.format(calendar.timegm(time.gmtime()))
       cmd = 'rsync -ravpP {} {}'.format(H264_FILENAME, H264_FILENAME.replace('.h264',tmp))
       os.system(cmd)
   
@@ -337,7 +342,7 @@ if __name__ == '__main__':
   
   if not OFFLINE:
       try:
-          gmail.send_email(hostname+' : Start in {} : {}hr'.format(sleep_time,sleep_time/3600.),
+          gmail.send_email(hostname+' : Start in {} : {:0.1f}hr'.format(sleep_time,sleep_time/3600.),
                           'Time-lapse \n {}'.format(description))
       except:
           print 'Failed to email'
@@ -361,15 +366,14 @@ if __name__ == '__main__':
   if not OFFLINE:
       if not os.path.exists(MP4_FILENAME):
         exit("No video to upload")
-        gmail.send_email(hostname+' : Timelapse Failure',
-                         'Failed to find Mp4')
+        gmail.send_email(hostname+' : Time-lapse Failure', 'Failed to find Mp4')
   
       # youtube upload
-      get_authenticated_service(args)
       try:
+        youtube = get_authenticated_service(args)
         youtube_id = initialize_upload(youtube, args, title, description, private)
         if youtube_id is not None:
-            description += '\n  Youtube: http://youtu.be/{}'.format(youtube_id)
+            description += '\n  Youtube: http://youtu.be/{} (higher resolution and nicer playback)'.format(youtube_id)
         
       except HttpError as e:
         print "An HTTP error %d occurred:\n%s" % (e.resp.status, e.content)
@@ -394,4 +398,4 @@ if __name__ == '__main__':
       os.rename(MP4_FILENAME, MP4_FILENAME.replace('todays','previous'))
   
   if not OFFLINE:
-    gmail.send_email(hostname+' : Time-lapse Finished!','Everything is good?')
+    gmail.send_email(hostname+' : Time-lapse Finished!','Everything is good? \n\n{}'.format(description))
