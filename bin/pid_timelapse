@@ -2,6 +2,8 @@
 
 PIDFILE=/tmp/timelapse.pid
 
+
+pushd ~/tmp/timelapse/ > /dev/null
 source /home/pi/.bashrc
 
 export PATH=$HOME/dev/scintillate/bin:$PATH
@@ -37,7 +39,10 @@ if [ $START -eq 1 ]; then
     echo "-------------"
     echo " $(date) : $(date +%s)"
     echo "> $(date) : $(date +%s)" > /tmp/timelapse.log
+    pushd
     /usr/bin/python -u ~/dev/timerasp/bin/time_lapse_upload.py $1 >> /tmp/timelapse.log 2>&1 &
     echo $! > $PIDFILE
     echo "RUNNING!"
 fi
+
+popd > /dev/null

@@ -1,5 +1,7 @@
 #!/bin/bash
 
+pushd ~/tmp/timelapse/ > /dev/null
+
 PIDFILE=/tmp/night_timelapse.pid
 LOGFILE=/tmp/night_timelapse.log
 source /home/pi/.bashrc
@@ -35,3 +37,5 @@ if [ $START -eq 1 ]; then
     echo $! > $PIDFILE
     echo "RUNNING!"
 fi
+
+popd > /dev/null
