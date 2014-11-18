@@ -102,7 +102,11 @@ def get_authenticated_service(args):
   return build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION,
     http=credentials.authorize(httplib2.Http()))
 
-def initialize_upload(youtube, options, title, description):
+def initialize_upload(youtube, options, title, description, private=True):
+  if private:
+      privacy = VALID_PRIVACY_STATUSES[1]
+  else:
+      privacy = VALID_PRIVACY_STATUSES[0]
   tags = None
 
   body=dict(
@@ -113,7 +117,7 @@ def initialize_upload(youtube, options, title, description):
       categoryId=""
     ),
     status=dict(
-      privacyStatus=VALID_PRIVACY_STATUSES[0]
+      privacyStatus=privacy,
     )
   )
 
@@ -135,7 +139,7 @@ def initialize_upload(youtube, options, title, description):
     media_body=MediaFileUpload(MP4_FILENAME, chunksize=-1, resumable=True)
   )
 
-  resumable_upload(insert_request)
+  return resumable_upload(insert_request)
 
 # This method implements an exponential backoff strategy to resume a
 # failed upload.
@@ -148,8 +152,10 @@ def resumable_upload(insert_request):
       status, response = insert_request.next_chunk()
       if 'id' in response:
         print "Video id '%s' was successfully uploaded." % response['id']
+        return response['id']
       else:
         exit("The upload failed with an unexpected response: %s" % response)
+        # raise ValueError("The upload failed with an unexpected response: %s" % response)
     except HttpError, e:
       if e.resp.status in RETRIABLE_STATUS_CODES:
         error = "A retriable HTTP error %d occurred:\n%s" % (e.resp.status,
@@ -218,10 +224,12 @@ if __name__ == '__main__':
   FRAME = getarg('frame')
   NIGHT = getarg('night')
   
+  
+  private = False
   if NIGHT:
       H264_FILENAME = H264_FILENAME.replace('todays','night')
       MP4_FILENAME = MP4_FILENAME.replace('todays','night')
-  
+      private = True
   
   
   # Parse everything else
@@ -247,10 +255,10 @@ if __name__ == '__main__':
   sunset = ephem.localtime(sunset) + time_after
   
   if HOUR:
-    sunset = sunrise + datetime.timedelta(minutes=60)
+    sunset = sunrise + datetime.timedelta(minutes=2)
   
   if NIGHT:
-      sunrise = datetime.datetime(now.year, now.month, now.day, 20)
+      sunrise = datetime.datetime(now.year, now.month, now.day, 22)
       sunset = sunrise + datetime.timedelta(hours=6)
       if sunrise < now:
           sunrise = now
@@ -264,15 +272,17 @@ if __name__ == '__main__':
   sleep_time = (sunrise - now).total_seconds()
   
   
-  title = 'Optical '+datetime.datetime.today().strftime("%Y-%m-%d")
+  title = 'IR '+datetime.datetime.today().strftime("%Y-%m-%d")
   hostname = socket.gethostname()
-  description='''Optical timelapse from a Raspberry PI
+  description='''Optical time-lapse video from a Raspberry PI
   
   Hostname: {hostname}
+  Run Time: {runtime:d}
   Sunrise: {sunrise}
   Sunset: {sunset}
   delta: {frame_time:0.2f} seconds
-  '''.format(sunrise=sunrise, sunset=sunset, frame_time=frame_time/1000, hostname=hostname)
+  '''.format(sunrise=sunrise, sunset=sunset, frame_time=frame_time/1000, 
+             hostname=hostname, runtime=calendar.timegm(time.gmtime()))
   
   
   output = dict(
@@ -298,14 +308,23 @@ if __name__ == '__main__':
   if NIGHT:
       extra = '-ss 10000000 -ISO 1600'
   else:
-      extra = ''
+      extra = '-awb off -ex verylong'
+  
+  
+  # backup if something went wrong.
+  if os.path.exists(H264_FILENAME):
+      tmp = '{:d}.h264'.format(calendar.timegm(time.gmtime()))
+      cmd = 'rsync -ravpP {} {}'.format(H264_FILENAME, H264_FILENAME.replace('.h264',tmp))
+      os.system(cmd)
   
   
   #-awb auto -ex verylong
   RECORD_COMMAND = "raspiyuv %(extra)s -h 1072 -w 1920 -t %(length)d -tl %(slice)d -o - | %(dir)s/rpi-encode-yuv > %(file)s"
   cmd = RECORD_COMMAND % {"length": video_length,
                           "slice": frame_time,
-                          "file": H264_FILENAME,'dir':openmax_dir,"extra":extra}
+                          "file": H264_FILENAME,
+                          'dir':openmax_dir,
+                          "extra":extra}
   CONVERT_COMMAND = "MP4Box -fps 24 -add %(in_file)s %(out_file)s"
   cmd2 = CONVERT_COMMAND % {"in_file": H264_FILENAME, "out_file": MP4_FILENAME}
   RSYNC_COMMAND = 'rsync -ravpP %(in_file)s %(out_file)s'
@@ -318,7 +337,7 @@ if __name__ == '__main__':
   
   if not OFFLINE:
       try:
-          gmail.send_email(hostname+' : Start in {}'.format(sleep_time),
+          gmail.send_email(hostname+' : Start in {} : {}hr'.format(sleep_time,sleep_time/3600.),
                           'Time-lapse \n {}'.format(description))
       except:
           print 'Failed to email'
@@ -326,7 +345,7 @@ if __name__ == '__main__':
   time.sleep(sleep_time)
   if not OFFLINE:
       try:
-          gmail.send_email(hostname+' : Timelapse',
+          gmail.send_email(hostname+' : Time-lapse Start!',
                       'Starting time-lapse \n {}'.format(description))
       except:
           print 'failed to email'
@@ -346,12 +365,15 @@ if __name__ == '__main__':
                          'Failed to find Mp4')
   
       # youtube upload
-      youtube = get_authenticated_service(args)
+      get_authenticated_service(args)
       try:
-        initialize_upload(youtube, args, title, description)
+        youtube_id = initialize_upload(youtube, args, title, description, private)
+        if youtube_id is not None:
+            description += '\n  Youtube: http://youtu.be/{}'.format(youtube_id)
+        
       except HttpError as e:
         print "An HTTP error %d occurred:\n%s" % (e.resp.status, e.content)
-        gmail.send_email(hostname+' : Timelapse Failure',
+        gmail.send_email(hostname+' : Time-lapse Failure',
                          'Failed to upload to youtube:\n{}'.format(e))
  
       # flickr upload
@@ -360,7 +382,7 @@ if __name__ == '__main__':
                             '"Raspberry Pi" IR timelapse timerasp JHU Baltimore Maryland',
                             public=True)
       except Exception as e:
-        gmail.send_email(hostname+' : Timelapse Failure',
+        gmail.send_email(hostname+' : Time-lapse Failure',
                          'Failed to upload to flickr:\n{}'.format(e))
   
   # clean up
@@ -372,4 +394,4 @@ if __name__ == '__main__':
       os.rename(MP4_FILENAME, MP4_FILENAME.replace('todays','previous'))
   
   if not OFFLINE:
-    gmail.send_email(hostname+' : Timelapse Success!','Everything is good!')
+    gmail.send_email(hostname+' : Time-lapse Finished!','Everything is good?')
