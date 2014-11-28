@@ -3,8 +3,8 @@
 
 pushd ~/tmp/timelapse
 
-
-INPUT=todays_video.h264
+#todays_video.h264
+INPUT=$1
 OUTPUT=$HOME/pictures/output.mp4
 # declare -i TIME
 # declare -i STIME

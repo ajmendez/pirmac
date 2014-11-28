@@ -323,14 +323,15 @@ if __name__ == '__main__':
   if NIGHT:
       extra = '-ss 10000000 -ISO 1600'
   else:
-      extra = '-awb off -ex verylong'
+      # extra = '-awb off -ex verylong'
+      extra = '-awb on -ex verylong'
   
   
   # backup if something went wrong.
-  if os.path.exists(H264_FILENAME):
-      tmp = '.{:d}.h264'.format(calendar.timegm(time.gmtime()))
-      cmd = 'rsync -ravpP {} {}'.format(H264_FILENAME, H264_FILENAME.replace('.h264',tmp))
-      os.system(cmd)
+  # if os.path.exists(H264_FILENAME):
+  #     tmp = '.{:d}.h264'.format(calendar.timegm(time.gmtime()))
+  #     cmd = 'rsync -ravpP {} {}'.format(H264_FILENAME, H264_FILENAME.replace('.h264',tmp))
+  #     os.system(cmd)
   
   
   #-awb auto -ex verylong
@@ -342,8 +343,8 @@ if __name__ == '__main__':
                           "extra":extra}
   CONVERT_COMMAND = "MP4Box -fps 24 -add %(in_file)s %(out_file)s"
   cmd2 = CONVERT_COMMAND % {"in_file": H264_FILENAME, "out_file": MP4_FILENAME}
-  RSYNC_COMMAND = 'rsync -ravpP %(in_file)s %(out_file)s'
-  cmd3 = RSYNC_COMMAND % {'in_file':MP4_FILENAME, 'out_file':DAILY_FILENAME}
+  # RSYNC_COMMAND = 'rsync -ravpP %(in_file)s %(out_file)s'
+  # cmd3 = RSYNC_COMMAND % {'in_file':MP4_FILENAME, 'out_file':DAILY_FILENAME}
   
   print('Record Command:\n {}'.format(cmd))
   print("  Sleeping for %d seconds" % sleep_time)
@@ -369,7 +370,7 @@ if __name__ == '__main__':
   os.system(cmd)
   description += '\n Captured Time: {}'.format(datetime.datetime.now())
   os.system(cmd2)
-  os.system(cmd3)
+  # os.system(cmd3)
   
   if DEBUG:
       sys.exit()
@@ -379,6 +380,7 @@ if __name__ == '__main__':
       if not os.path.exists(MP4_FILENAME):
         exit("No video to upload")
         gmail.send_email(hostname+' : Time-lapse Failure', 'Failed to find Mp4')
+        sys.exit()
   
       # youtube upload
       try:

@@ -29,6 +29,10 @@ else
     START=1
 fi
 
+if [ "$(pidof raspiyuv)" ]; then
+    START=0
+fi
+
 if [ $START -eq 1 ]; then
     # echo "-------------"
     # echo " $(date) : $(date +%s)"
