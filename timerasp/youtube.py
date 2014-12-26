@@ -86,9 +86,10 @@ def get_authenticated_service(args):
     scope=YOUTUBE_UPLOAD_SCOPE,
     message=MISSING_CLIENT_SECRETS_MESSAGE)
 
-  storage = Storage(STOREAGE_FILE)
-  credentials = storage.get()
-
+  storage = Storage(STORAGE_FILE)
+  # credentials = storage.get()
+  credentials = None
+  
   if credentials is None or credentials.invalid:
     credentials = run_flow(flow, storage, args)
 
@@ -153,7 +154,7 @@ def initialize_upload(youtube, filename, private=True, **kwargs):
   '''
   
   # ensure that we have some sane privacy things
-  if isinstance(private, 'str')
+  if isinstance(private, 'str'):
       privacy = private
       assert private in VALID_PRIVACY_STATUSES
   elif private:

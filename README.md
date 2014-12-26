@@ -23,3 +23,4 @@ http://www.raspberrypi.org/forums/viewtopic.php?f=43&t=70105&p=657575
   sudo pip install --upgrade google-api-python-client pyephem httplib2
   wget https://github.com/tjormola/rpi-openmax-demos/archive/master.zip
   >> scintillate, pymendez_basic
+  sudo pip install poster
