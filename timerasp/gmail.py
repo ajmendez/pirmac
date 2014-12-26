@@ -2,8 +2,14 @@
 '''
 http://stackoverflow.com/questions/11445523/python-smtplib-is-sending-mail-via-gmail-using-oauth2-possible
 
-# python gmail_oauth2.py --generate_oauth2_token --client_id=xxx.apps.googleusercontent.com --client_secret=xxx
-# python gmail_oauth2.py --client_id=xxx.apps.googleusercontent.com --client_secret=xxx --refresh_token=xxx
+https://console.developers.google.com/project
+export client_id=xxx.apps.googleusercontent.com
+export client_secret=
+export refresh_token=
+# python gmail_oauth2.py --generate_oauth2_token --client_id=$client_id --client_secret=$client_secret
+# python gmail_oauth2.py --client_id=$client_id --client_secret=$client_secret --refresh_token=$refresh_token
+
+
 # python gmail_oauth2.py --generate_oauth2_string --access_token=xxx --user=xxx@gmail.com
 # python gmail_oauth2.py --test_smtp_authentication --access_token=xxx --user=xxx@gmail.com
 # python gmail_oauth2.py --client_id=xxx.apps.googleusercontent.com --client_secret=xxx --refresh_token=xxx
