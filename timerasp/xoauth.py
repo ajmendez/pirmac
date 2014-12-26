@@ -78,6 +78,7 @@ import time
 import urllib
 
 
+
 def SetupOptionParser():
   # Usage message is the module's docstring.
   parser = OptionParser(usage=__doc__)
@@ -479,4 +480,7 @@ def main(argv):
     return
 
 if __name__ == '__main__':
+  from pysurvey import util
+  util.setup_stop()
+  
   main(sys.argv)

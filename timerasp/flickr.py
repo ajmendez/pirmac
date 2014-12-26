@@ -60,3 +60,10 @@ def upload(filename, title, description, tags, public=False):
     request = urllib2.Request(url, datagen, headers)
     return urllib2.urlopen(request).read()
 
+
+
+if __name__ == '__main__':
+    from pysurvey import util
+    util.setup_stop()
+    import sys
+    upload(sys.argv[1], 'test', 'debug', 'tag1 tag2')
