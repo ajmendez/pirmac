@@ -1,11 +1,16 @@
+
 import os
 import sys
 import time
+import json
 import ephem
 import random
+import socket
 import httplib
 import httplib2
 import datetime
+import calendar
+from timerasp import gmail, flickr
 
 from apiclient.discovery import build
 from oauth2client.file import Storage
@@ -15,9 +20,11 @@ from oauth2client.tools import argparser, run_flow
 from oauth2client.client import flow_from_clientsecrets
 
 
-DIRECTORY = os.path.expanduser('~/.limited')
-OAUTH_STORAGEFILE = os.path.join(DIRECTORY, 'youtube_oauth2.json')
-OAUTH_SECRETSFILE = os.path.join(DIRECTORY, 'youtube_secrets.json')
+
+CLIENT_SECRETS_FILE = os.path.expanduser("~/.limited/youtube_client.json")
+STORAGE_FILE = os.path.expanduser('~/.limited/youtube_oauth2.json')
+
+
 
 
 
@@ -38,9 +45,7 @@ RETRIABLE_EXCEPTIONS = (httplib2.HttpLib2Error, IOError, httplib.NotConnected,
 # codes is raised.
 RETRIABLE_STATUS_CODES = [500, 502, 503, 504]
 
-
-
-# The OAUTH_SECRETSFILE variable specifies the name of a file that contains
+# The CLIENT_SECRETS_FILE variable specifies the name of a file that contains
 # the OAuth 2.0 information for this application, including its client_id and
 # client_secret. You can acquire an OAuth 2.0 client ID and client secret from
 # the Google Developers Console at
@@ -49,8 +54,7 @@ RETRIABLE_STATUS_CODES = [500, 502, 503, 504]
 # For more information about using OAuth2 to access the YouTube Data API, see:
 #   https://developers.google.com/youtube/v3/guides/authentication
 # For more information about the client_secrets.json file format, see:
-#   https://developers.google.com/api-client-library/python/guide/aaa_client_secrets
-
+#  https://developers.google.com/api-client-library/python/guide/aaa_client_secrets
 
 
 # This OAuth 2.0 access scope allows an application to upload files to the
@@ -61,28 +65,52 @@ YOUTUBE_API_VERSION = "v3"
 
 # This variable defines a message to display if the CLIENT_SECRETS_FILE is
 # missing.
-MISSING_CLIENT_SECRETS_MESSAGE = """
-WARNING: Please configure OAuth 2.0
+MISSING_CLIENT_SECRETS_MESSAGE = """ WARNING: Please configure OAuth 2.0
 
 To make this sample run you will need to populate the client_secrets.json file
 found at:
-
-   %s
-
+   {clientsecret}
 with information from the Developers Console
 https://cloud.google.com/console
 
 For more information about the client_secrets.json file format, please visit:
 https://developers.google.com/api-client-library/python/guide/aaa_client_secrets
-""" % OAUTH_SECRETSFILE
+""".format(clientsecret=CLIENT_SECRETS_FILE)
 
 VALID_PRIVACY_STATUSES = ("public", "private", "unlisted")
 
 
 
-# This method implements an exponential backoff strategy to resume a
-# failed upload.
+def get_authenticated_service(args):
+  flow = flow_from_clientsecrets(CLIENT_SECRETS_FILE,
+    scope=YOUTUBE_UPLOAD_SCOPE,
+    message=MISSING_CLIENT_SECRETS_MESSAGE)
+
+  storage = Storage(STOREAGE_FILE)
+  credentials = storage.get()
+
+  if credentials is None or credentials.invalid:
+    credentials = run_flow(flow, storage, args)
+
+  return build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION,
+    http=credentials.authorize(httplib2.Http()))
+
+def setup():
+    '''Attempt to setup a nice youtube objeect'''
+    # do not actually parse arguments
+    args = argparser.parse_args(args=[])
+    args.noauth_local_webserver=True
+    youtube = get_authenticated_service(args)
+    return youtube
+
+
+
+
+
+
 def resumable_upload(insert_request):
+  '''This method implements an exponential backoff strategy to resume a
+  failed upload. Rather than exit throw an error.'''
   response = None
   error = None
   retry = 0
@@ -91,8 +119,10 @@ def resumable_upload(insert_request):
       status, response = insert_request.next_chunk()
       if 'id' in response:
         print "Video id '%s' was successfully uploaded." % response['id']
+        return response['id']
       else:
-        exit("The upload failed with an unexpected response: %s" % response)
+        # exit("The upload failed with an unexpected response: %s" % response)
+        raise ValueError("The upload failed with an unexpected response: %s" % response)
     except HttpError, e:
       if e.resp.status in RETRIABLE_STATUS_CODES:
         error = "A retriable HTTP error %d occurred:\n%s" % (e.resp.status,
@@ -106,7 +136,8 @@ def resumable_upload(insert_request):
       print error
       retry += 1
       if retry > MAX_RETRIES:
-        exit("No longer attempting to retry.")
+        # exit("No longer attempting to retry.")
+        raise ValueError('No longer attempting to retry.')
 
       max_sleep = 2 ** retry
       sleep_seconds = random.random() * max_sleep
@@ -114,71 +145,87 @@ def resumable_upload(insert_request):
       time.sleep(sleep_seconds)
 
 
-class Youtube(object):
-    def __init__(self, args=None):
-        # DEBUG
-        sys.argv.append('--noauth_local_webserver')
-        if args is None:
-            args = argparser.parse_args()
-        self.args = args
-        self.youtube = None
-    
-    def authenticate(self):
-        if self.youtube != None:
-            print 'Already authenticated'
-            return
-        
-        flow = flow_from_clientsecrets(OAUTH_SECRETSFILE,
-                                       scope=YOUTUBE_UPLOAD_SCOPE,
-                                       message=MISSING_CLIENT_SECRETS_MESSAGE)
-        storage = Storage(OAUTH_STORAGEFILE)
-        credentials = storage.get()
-        
-        if credentials is None or credentials.invalid:
-            credentials = run_flow(flow, storage, args)
-        
-        self.youtube = build(YOUTUBE_API_SERVICE_NAME, 
-                             YOUTUBE_API_VERSION,
-                             http=credentials.authorize(httplib2.Http()))
-    
-    def upload(self, filename, privacy=None, **kwargs):
-        '''
-        privacy must be one of {privacy} Defaults to public
-        channelId:
-        https://www.googleapis.com/youtube/v3/videoCategories?part=snippet&regionCode={two-character-region}&key={YOUR_API_KEY}
-        '''.format(privacy=VALID_PRIVACY_STATUSES)
-        if privacy is None:
-            privacy = VALID_PRIVACY_STATUSES[0]
-        snippet = dict(
-            title='',
-            description='',
-            tags='timelapse,baltimore,raspberrypi,noir', # 'tag1, tag2'
-            channelId='UCBR8-60-B28hp2BmDPdntcQ',
-        )
-        snippet.update(kwargs)
-        body = dict(
-            snippet=snippet
-            status=dict(privacyStatus=privacy)
-        )
-        media_body = MediaFileUpload(filename, chunksize=-1, resumable=True)
-        
-        videos = self.youtube.videos()
-        request = videos.insert(part=",".join(body.keys()),
-                                body=body,
-                                media_body=media_body)
-        resumable_upload(request)
+
+def initialize_upload(youtube, filename, private=True, **kwargs):
+  '''start the upload
+  kwargs handles title, desctiption, tags
+  
+  '''
+  
+  # ensure that we have some sane privacy things
+  if isinstance(private, 'str')
+      privacy = private
+      assert private in VALID_PRIVACY_STATUSES
+  elif private:
+      privacy = VALID_PRIVACY_STATUSES[1]
+  else:
+      privacy = VALID_PRIVACY_STATUSES[0]
+  tags = None
+  
+  
+  # build the body
+  body=dict(
+    snippet=dict(
+      title='title',
+      description='description',
+      tags='timerasp',
+      categoryId="1", # arts
+    ),
+    status=dict(
+      privacyStatus=privacy,
+    )
+  )
+  body['snippet'].update(kwargs)
+
+  # build the media 
+  # The chunksize parameter specifies the size of each chunk of data, in
+  # bytes, that will be uploaded at a time. Set a higher value for
+  # reliable connections as fewer chunks lead to faster uploads. Set a lower
+  # value for better recovery on less reliable connections.
+  #
+  # Setting "chunksize" equal to -1 in the code below means that the entire
+  # file will be uploaded in a single HTTP request. (If the upload fails,
+  # it will still be retried where it left off.) This is usually a best
+  # practice, but if you're using Python older than 2.6 or if you're
+  # running on App Engine, you should set the chunksize to something like
+  # 1024 * 1024 (1 megabyte).
+  MediaFileUpload(filename, chunksize=-1, resumable=True)
+  
+  
+  
+  # Call the API's videos.insert method to create and upload the video.
+  insert_request = youtube.videos().insert(
+    part=",".join(body.keys()),
+    body=body,
+    media_body=media_body,
+  )
+
+  return resumable_upload(insert_request)
 
 
-def upload(filename, title, description, public=False):
-    # youtube upload
-    valid_index = 0 if public else 1
+
+
+
+
+def upload(filename, title, description, tags, private=True):
+    tmp = dict(
+        title=title, 
+        description=description,
+        tags=tags,
+        private=private,
+    )
     try:
-        youtube = Youtube()
-        youtube.upload(filename, 
-                       title=title, 
-                       description=description,
-                       privacy=VALID_PRIVACY_STATUSES[valid_index])
+        api = setup()
+        youtube_ident = initialize_upload(api, **tmp)
     except HttpError as e:
       print "An HTTP error %d occurred:\n%s" % (e.resp.status, e.content)
       raise
     
+
+
+
+if __name__ == "__main__":
+    if len(sys.argv) == 1:
+        print setup()
+    else:
+        print upload(sys.argv[1], 'debug', 'debug video', 'debug,timerasp', True)

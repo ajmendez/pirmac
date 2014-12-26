@@ -102,6 +102,15 @@ def get_authenticated_service(args):
   return build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION,
     http=credentials.authorize(httplib2.Http()))
 
+
+
+
+
+
+
+
+
+
 def initialize_upload(youtube, options, title, description, private=True):
   if private:
       privacy = VALID_PRIVACY_STATUSES[1]
