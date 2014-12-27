@@ -102,7 +102,7 @@ EMAIL_TITLE_TEMPLATE = Template(u'{{ hostname }} Time-lapse : {{message}}')
 
 EMAIL_BODY_TEMPLATE = Template(u'{{body}}\n\n {{description}}')
 
-NORUN_TEMPLATE = Template(u''' [Not Running!]
+INFO_TEMPLATE = Template(u'''
     Video Title: {{title}}
     Video Description: {{description}}
 
@@ -154,7 +154,7 @@ def get_times(delta_before=60, delta_after=60):
     '''.format(**locals())
     
     here = ephem.Observer()
-    here.lon, here.lat = LAT, LON
+    here.lon, here.lat = LON, LAT
     sunrise = here.next_rising(ephem.Sun())
     sunrise = ephem.localtime(sunrise) - datetime.timedelta(minutes=delta_before)
     sunset = here.next_setting(ephem.Sun())
@@ -163,14 +163,14 @@ def get_times(delta_before=60, delta_after=60):
     # Force the start to happen now, if requested
     # or if the day has already started
     # TODO correct in changing this (sunrise > ephem.localtime(sunset)) ??
-    if (sunrise > NOW) or (START):
+    if (sunrise > sunset) or (START):
         sunrise = NOW
     
     # if we are doing a night start at 10 and record for 6 hrs
     if NIGHT:
         sunrise = datetime.datetime(NOW.year, NOW.month, NOW.day, NIGHT_START)
         sunset = sunrise + datetime.timedelta(hours=NIGHT_DURATION)
-        if (sunrise > NOW) or (START):
+        if (sunrise > sunset) or (START):
             sunrise = NOW
     
     return sunrise, sunset
@@ -190,7 +190,7 @@ def video_properties():
     sunrise, sunset = get_times()
     
     # length of the video in miliseconds
-    video_length = (sunset - sunrise).total_seconds() * 1000
+    video_length = int((sunset - sunrise).total_seconds() * 1000)
     
     # Total number of frames  (5 minutes )
     total_frames = 5 * 60 * 24
@@ -287,7 +287,7 @@ def save_h264backup():
         tmp = '.{:d}.h264'.format(calendar.timegm(time.gmtime()))
         cmd = 'rsync -ravpP {} {}'.format(H264_FILENAME, 
                                           H264_FILENAME.replace('.h264',tmp))
-        subprocess.call(cmd)
+        call(cmd)
     
 
 
@@ -301,12 +301,14 @@ def timelapse_notify(message, body=None, **kwargs):
     print ' Note: %s'%message
     if not OFFLINE:
         try:
-            print '--- Sending email --- \n TITLE: {}\n{} ------'.format(EMAIL_TITLE_TEMPLATE.render(tmp),
-                                                                  EMAIL_BODY_TEMPLATE.render(tmp))
-            # gmail.send_email(EMAIL_TITLE_TEMPLATE.render(tmp),
-            #                  EMAIL_BODY_TEMPLATE.render(tmp) )
+            gmail.send_email(EMAIL_TITLE_TEMPLATE.render(tmp),
+                             EMAIL_BODY_TEMPLATE.render(tmp) )
         except Exception as e:
             print 'Could not send email: {}'.format(e)
+    else:
+        print '--- Sending email --- \n TITLE: {}\n{} ------'.format(EMAIL_TITLE_TEMPLATE.render(tmp),
+                                                              EMAIL_BODY_TEMPLATE.render(tmp))
+        
         
 
 class Errors(object):
@@ -405,11 +407,12 @@ def main():
     # get the commands
     record = RECORD_COMMAND.render(**video_text)
     convert = CONVERT_COMMAND.render(**video_text)
+    rsync = RSYNC_COMMAND.render(**video_props)
     
+    
+    info = INFO_TEMPLATE.render(record_cmd=record,convert_cmd=convert,**video_text)
+    print(info)
     if NORUN:
-        print(NORUN_TEMPLATE.render(record_cmd=record,
-                                    convert_cmd=convert,
-                                    **video_text))
         return
     
     # Save information about run
@@ -419,6 +422,7 @@ def main():
     save_h264backup()
     
     # Wait untill ready
+    print(info)
     time.sleep(video_props['sleep_time'])
     
     
@@ -438,7 +442,7 @@ def main():
            'Required file is missing: %s'%MP4_FILENAME
     
     if DAILY:
-        call(RSYNC_COMMAND.render(**video_props))
+        call(rsync)
     
     # Upload 
     if not OFFLINE:
@@ -450,18 +454,21 @@ def main():
         video_text = upload_flickr(video_text)
     
     # Cleanup 
-    os.remove(H264_FILENAME)
-    os.rename(MP4_FILENAME, PREVIOUS_FILENAME)
+    try:
+        os.remove(H264_FILENAME)
+        os.rename(MP4_FILENAME, PREVIOUS_FILENAME)
+    except Exception as e:
+        print 'Could not clean up: %s'%e
 
 
-@message('relax ok', 'relax problem')
-def relax():
-    raise ValueError('Ok ERROR')
-
-@message('Everything ok?', 'Problem!', strict=True)
-def debug():
-    relax()
-    assert True==False
+# @message('relax ok', 'relax problem')
+# def relax():
+#     raise ValueError('Ok ERROR')
+#
+# @message('Everything ok?', 'Problem!', strict=True)
+# def debug():
+#     relax()
+#     assert True==False
 
 if __name__ == '__main__':
   main()

@@ -1,15 +1,18 @@
 #!/bin/bash
 
-PIDFILE=/tmp/timelapse.pid
+PIDFILE=$HOME/tmp/timelapse.pid
+LOGFILE=$HOME/tmp/timelapse.log
 
 
-pushd ~/tmp/timelapse/ > /dev/null
+OPTIONS='music daily'
+
+pushd ~/tmp/timelapse/ > /dev/null 2>&1
 source /home/pi/.bashrc
 
 export PATH=$HOME/dev/scintillate/bin:$PATH
 export PYTHONPATH="$HOME/dev/scintillate:${PYTHONPATH}"
-
 export PYTHONPATH="$HOME/dev/pymendez:${PYTHONPATH}"
+export PYTHONPATH="$HOME/dev/pymendez_basic:${PYTHONPATH}"
 export PYTHONPATH="$HOME/dev/pysurvey:${PYTHONPATH}"
 export PYTHONPATH="$HOME/dev/timerasp:${PYTHONPATH}"
 export PYTHONPATH="$HOME/dev/picamera:${PYTHONPATH}"
@@ -19,8 +22,8 @@ if [ -e "$PIDFILE" ]; then
     PID="$(cat $PIDFILE)"
     if ! ps -p $PID > /dev/null ; then
         # last process is not around
-        echo "Clean up from last process"
-        rm /tmp/timelapse.pid
+        echo "Clean up from last process [$PID]"
+        rm $PIDFILE
         START=1
     else
         echo -n '.'
@@ -34,19 +37,13 @@ if [ "$(pidof raspiyuv)" ]; then
 fi
 
 if [ $START -eq 1 ]; then
-    # echo "-------------"
-    # echo " $(date) : $(date +%s)"
-    # sleep 10 &
-    # echo $! > $PIDFILE
-    # echo "RUNNING!"
-    
     echo "-------------"
     echo " $(date) : $(date +%s)"
-    echo "> $(date) : $(date +%s)" > /tmp/timelapse.log
+    echo "> $(date) : $(date +%s)" > $LOGFILE
     pushd
-    /usr/bin/python -u ~/dev/timerasp/bin/time_lapse_upload.py $1 >> /tmp/timelapse.log 2>&1 &
+    /usr/bin/python -u $HOME/dev/timerasp/bin/timerasp $OPTIONS >> $LOGFILE 2>&1 &
     echo $! > $PIDFILE
     echo "RUNNING!"
 fi
 
-popd > /dev/null
+popd > /dev/null 2>&1

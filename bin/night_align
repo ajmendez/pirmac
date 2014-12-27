@@ -1,0 +1,19 @@
+#!/bin/bash
+
+
+# night time alignment
+
+FILE="$HOME/tmp/timelapse/align.jpg"
+SMALL="$HOME/tmp/timelapse/align_small.jpg"
+TIME="${1:-5000000}"
+EX="night"
+EX="longexposure -rot 270"
+EX='off'
+
+while [ 1 ]; do
+	# get image
+	raspistill -h 1080 -w 1920 -n -ISO 1600 -q 100 -ex $EX  -ss $TIME -o $FILE
+	# resize 
+	convert $FILE -adaptive-resize 480x270  $SMALL
+	display $SMALL
+done
