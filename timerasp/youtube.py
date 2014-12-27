@@ -87,8 +87,11 @@ def get_authenticated_service(args):
     message=MISSING_CLIENT_SECRETS_MESSAGE)
 
   storage = Storage(STORAGE_FILE)
-  # credentials = storage.get()
-  credentials = None
+  try:
+      credentials = storage.get()
+  except:
+      # not sure why I had to wrap this
+      credentials = None
   
   if credentials is None or credentials.invalid:
     credentials = run_flow(flow, storage, args)
@@ -154,7 +157,7 @@ def initialize_upload(youtube, filename, private=True, **kwargs):
   '''
   
   # ensure that we have some sane privacy things
-  if isinstance(private, 'str'):
+  if isinstance(private, str):
       privacy = private
       assert private in VALID_PRIVACY_STATUSES
   elif private:
@@ -190,7 +193,7 @@ def initialize_upload(youtube, filename, private=True, **kwargs):
   # practice, but if you're using Python older than 2.6 or if you're
   # running on App Engine, you should set the chunksize to something like
   # 1024 * 1024 (1 megabyte).
-  MediaFileUpload(filename, chunksize=-1, resumable=True)
+  media_body = MediaFileUpload(filename, chunksize=-1, resumable=True)
   
   
   
@@ -209,6 +212,7 @@ def initialize_upload(youtube, filename, private=True, **kwargs):
 
 
 def upload(filename, title, description, tags, private=True):
+    '''Uploads a video to youtube'''
     tmp = dict(
         title=title, 
         description=description,
@@ -217,7 +221,8 @@ def upload(filename, title, description, tags, private=True):
     )
     try:
         api = setup()
-        youtube_ident = initialize_upload(api, **tmp)
+        youtube_ident = initialize_upload(api, filename, **tmp)
+        return youtube_ident
     except HttpError as e:
       print "An HTTP error %d occurred:\n%s" % (e.resp.status, e.content)
       raise

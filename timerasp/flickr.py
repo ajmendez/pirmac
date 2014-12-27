@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import os
+import sys
 import urllib2
 import flickrapi
 from scintillate import api
@@ -38,14 +39,14 @@ class file_with_callback(file):
 
 
 
-def upload(filename, title, description, tags, public=False):
+def upload(filename, title, description, tags, private=True):
     x = api.Flickr().flickr
     arguments = {'auth_token': x.token_cache.token, 
                  'api_key': x.api_key,
                  'title':title,
                  'description':description,
                  'tags':tags,
-                 'is_public':'1' if public else '0'}
+                 'is_public':'0' if private else '1'}
     kwargs = flickrapi.make_utf8(arguments)
     kwargs['api_sig'] = x.sign(kwargs)
     url = "https://%s%s" % (x.flickr_host, x.flickr_upload_form)
@@ -65,5 +66,4 @@ def upload(filename, title, description, tags, public=False):
 if __name__ == '__main__':
     from pysurvey import util
     util.setup_stop()
-    import sys
     upload(sys.argv[1], 'test', 'debug', 'tag1 tag2')

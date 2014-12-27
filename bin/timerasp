@@ -2,11 +2,8 @@
 '''TimeRasp command
 2014 Mendez
 
-# ephem, httplib2, flickrapi, exifread, poster, apiclient, urllib3
-
-
+# ephem, httplib2, flickrapi, exifread, poster, apiclient, urllib3, jinja2
 '''
-#!/usr/bin/python
 
 import os
 import sys
@@ -17,12 +14,13 @@ import random
 import socket
 import httplib
 import httplib2
-from datetime import datetime
 import calendar
-from timerasp import gmail, flickr, youtube
+import datetime
+import subprocess
+import traceback
+from jinja2 import Template
+from timerasp import gmail, flickr, youtube, music
 
-# Do not wait for sunrise, just start the video right away for debug
-START = ('start' in sys.argv)
 
 # Do not emit emails, or attempt to send the videos to flickr/youtube
 OFFLINE = ('offline' in sys.argv)
@@ -30,32 +28,123 @@ OFFLINE = ('offline' in sys.argv)
 # Longer exposures and different start times
 NIGHT = ('night' in sys.argv)
 
+# add in music tracks
+MUSIC = ('music' in sys.argv)
+
+# Daily saves
+DAILY = ('daily' in sys.argv)
+
 # Do not run video command -- for debug of description
 NORUN = ('norun' in sys.argv)
 
-# Some nice things 
-NOW = datetime.now()
-LAT,LON = '-76.623434', '39.331628'
+# debug
+DEBUG = ('debug' in sys.argv)
 
-OUTDIR = os.path.expanduser('~/tmp/timelapse')
-H264_FILENAME = os.path.join(OUTDIR, '{prefix}_videp.h264'.format(**tmp))
+# make the output video private -- for debug
+PRIVATE = ('private' in sys.argv)
+
+# Do not wait for sunrise, just start the video right away for debug
+START = ('start' in sys.argv)
+
+
+# Some nice things 
+NOW = datetime.datetime.now()
+RUNINT = calendar.timegm(time.gmtime())
+LAT, LON = '48.457213','-122.882080'
+WAVEBAND = 'optical'
+TAGS = 'timerasp, timelapse, "raspberry pi"'
+# WAVEBAND = 'IR'
+# LAT, LON = '39.331628', '-76.623434' # JHU
+# TAGS = 'timerasp, timelapse, maryland, baltimore, JHU, "raspberry pi"'
+
+# Set some nice settings
+MAIN_SETTINGS = '-h 1072 -w 1920 -n' # no preview
+CONVERT_SETTINGS = '-fps 24'
+if NIGHT:
+    PREFIX = 'night'
+    OLDPREFIX = 'previous_night'
+    NIGHT_START = 22   # 10pm
+    NIGHT_DURATION = 6 # hours
+    EXTRA_SETTINGS = '-ss 10000000 -ISO 1600'
+else:
+    PREFIX = 'todays'
+    OLDPREFIX = 'previous'
+    EXTRA_SETTINGS = '-awb auto -ex verylong'
+
+
+RPI_ENCODE = os.path.expanduser('~/tmp/timelapse/rpi-openmax-demos-master/rpi-encode-yuv')
+OUT_DIR = os.path.expanduser('~/tmp/timelapse')
+DAILY_DIR = os.path.expanduser('~/video_archive/')
+H264_FILENAME = os.path.join(OUT_DIR, '%s_video.h264'%PREFIX)
 MP4_FILENAME = H264_FILENAME.replace('.h264', '.mp4')
-DAILY_FILENAME = os.path.join(OUTDIR, '{runint}_video.mp4'.format(**tmp))
-OPENMAX_DIR = os.path.expanduser('~/tmp/timelapse/rpi-openmax-demos-master')
+PREVIOUS_FILENAME = MP4_FILENAME.replace(PREFIX, OLDPREFIX)
+DAILY_FILENAME = os.path.join(DAILY_DIR, '%d_video.mp4'%RUNINT)
+DAILY_JSONFILE = DAILY_FILENAME.replace('_video.mp4','_info.json')
+
+# Some nice templates
+TITLE_TEMPLATE = Template(u'{% if NIGHT %}{{prefix.capitalize()}} {% endif %}'
+                          u'{{waveband.capitalize()}}'
+                          u' {{sunrise.strftime("%Y-%m-%d")}} Timelapse')
+
+DESCRIPTION_TEMPLATE = Template(u'''{% if NIGHT %}{{prefix.capitalize()}} {% endif %}{{waveband.capitalize()}} time-lapse video from a Raspberry PI
+
+  Hostname: {{hostname}}
+  Run Time: {{runint}}
+  Sunrise: {{sunrise}}
+  Sunset: {{sunset}}
+  delta: {{ "%0.2f" % (frame_time/1000.0)}} seconds'''
+  '{% if capture_time %}\n    Captured Time: {{capture_time}} {% endif %}'
+  '{% if youtube_id %}\n    Youtube: http://youtu.be/{{youtube_id}} (higher resolution and nicer playback){% endif %}'
+  '{% if musictext %} \n\n{{musictext}} {% endif %}'
+)
+
+EMAIL_TITLE_TEMPLATE = Template(u'{{ hostname }} Time-lapse : {{message}}')
+
+EMAIL_BODY_TEMPLATE = Template(u'{{body}}\n\n {{description}}')
+
+NORUN_TEMPLATE = Template(u''' [Not Running!]
+    Video Title: {{title}}
+    Video Description: {{description}}
+
+ [info]
+    Delay: {{ "%0.2f" % (sleep_time / 3600.0) }} hr [{{ "%0.2f" % (sleep_time) }} s]
+
+ [commands]
+    Record Command: {{ record_cmd }}
+    
+    Convert Command: {{ convert_cmd }}
+    
+''')
+
+
+# the commands
+RECORD_COMMAND = Template(u'raspiyuv {{extra_settings}} {{main_settings}}'
+                          u' -t {{video_length}} -tl {{frame_time}} -o -'
+                          ' | {{encoder}} > {{filename}}')
+CONVERT_COMMAND = Template(u'MP4Box {{convert_settings}}'
+                           u'{% if musicfile %} -add {{musicfile}}#audio {% endif %}'
+                           u' -add {{filename}} {{mp4filename}}')
+RSYNC_COMMAND = Template(u'rsync -ravpP {{mp4filename}} {{dailyfilename}}')
+
 
 # --------------------
 
 
-if NIGHT:
-    PREFIX = 'night'
-    NIGHT_START = 22   # 10pm
-    NIGHT_DURATION = 6 # hours 
-else:
-    PREFIX = 'todays'
-tmp = dict(
-    prefix=prefix,
-    runint = calendar.timegm(time.gmtime()),
-)
+
+
+
+
+
+
+
+def check_diskspace(freespace=1, outdir=OUT_DIR):
+    '''Raises an Error if there is not at least {freespace}GB
+    of free space left in the output_dir: {outdir}'''.format(**locals())
+    s = os.statvfs(outdir)
+    space = (s.f_bavail * s.f_frsize) / 2.0**30 # GB
+    assert space > freespace, \
+        'Free Space [{}GB] is less than required [{}GB] in directory: {}.'.format(
+            space, freespace, outdir)
 
 
 def get_times(delta_before=60, delta_after=60):
@@ -66,188 +155,315 @@ def get_times(delta_before=60, delta_after=60):
     
     here = ephem.Observer()
     here.lon, here.lat = LAT, LON
-    time_before = datetime.timedelta(minutes=delta)
-    time_after = datetime.timedelta(minutes=delta)
     sunrise = here.next_rising(ephem.Sun())
-    sunrise = ephem.localtime(sunrise) - time_before
+    sunrise = ephem.localtime(sunrise) - datetime.timedelta(minutes=delta_before)
     sunset = here.next_setting(ephem.Sun())
-    sunset = ephem.localtime(sunset) + time_after
+    sunset = ephem.localtime(sunset) + datetime.timedelta(minutes=delta_after)
     
     # Force the start to happen now, if requested
     # or if the day has already started
-    if START:
-      sunrise = NOW
-    else:
-      if sunrise > ephem.localtime(sunset):
+    # TODO correct in changing this (sunrise > ephem.localtime(sunset)) ??
+    if (sunrise > NOW) or (START):
         sunrise = NOW
     
     # if we are doing a night start at 10 and record for 6 hrs
     if NIGHT:
         sunrise = datetime.datetime(NOW.year, NOW.month, NOW.day, NIGHT_START)
         sunset = sunrise + datetime.timedelta(hours=NIGHT_DURATION)
-        if sunrise < NOW:
+        if (sunrise > NOW) or (START):
             sunrise = NOW
     
     return sunrise, sunset
 
 
-def video_properties(sunrise, sunset):
+def video_properties():
+    '''Returns a dictionary of properties of the video in "nice" units.
+    sunrise, sunset: start and stop datetimes
+    sleep_time: how long to wait for the capture
+    
+    video_length: milliseconds of video to capture
+    frame_time: miliseconds per frame
+    total_frames: number of frames to capture
+    
+    '''
+    
+    sunrise, sunset = get_times()
+    
+    # length of the video in miliseconds
     video_length = (sunset - sunrise).total_seconds() * 1000
+    
+    # Total number of frames  (5 minutes )
     total_frames = 5 * 60 * 24
     if NIGHT:
         total_frames = 2 * 60 * 24
+    
+    # time between frames
     frame_time = video_length / total_frames
-    if FRAME:
+    if NIGHT:
         frame_time = 12 * 1000
   
     # ensure some sort of sanity
-    min_frame_time = int(5.0*1000)
+    min_frame_time = 5*1000 # Minimum 5 seconds between frames
     if frame_time < min_frame_time:
         frame_time = min_frame_time
-  
-    sleep_time = (sunrise - now).total_seconds()
+    
+    if DEBUG:
+        # frame every 5 seconds
+        # Record for a total of 4 minute
+        # gives ~ 2 seconds of film
+        frame_time = 5 * 1000
+        video_length = 4 * 60 * 1000
+        sunset = sunrise + datetime.timedelta(seconds=video_length / 1000)
+    
+    
+    sleep_time = (sunrise - NOW).total_seconds()
+    
+    # for simplicity of the templateing
+    encoder = RPI_ENCODE
+    filename = H264_FILENAME
+    main_settings = MAIN_SETTINGS
+    extra_settings = EXTRA_SETTINGS
+    convert_settings = CONVERT_SETTINGS
+    mp4filename = MP4_FILENAME
+    dailyfilename = DAILY_FILENAME
+    
+    return locals()
 
 
-tags="timerasp,timelapse,maryland,baltimore,JHU,raspberry pi"
+def video_description(**kwargs):
+    '''Generate some nice video description text'''
+    props = dict(
+        prefix=PREFIX,
+        waveband=WAVEBAND,
+        runint=RUNINT,
+        hostname=socket.gethostname(),
+        starttime=NOW,
+    )
+    props.update(kwargs)
 
+    # probably a better way, but lets just reissue props
+    tmp = dict(
+        tags = TAGS,
+        title = TITLE_TEMPLATE.render(**props),
+        description = DESCRIPTION_TEMPLATE.render(**props)
+    )
+    props.update(tmp)
+    
+    return props
+
+def add_music(build=False, **kwargs):
+    if MUSIC:
+        sunrise = kwargs['sunrise']
+        length = kwargs['video_length']/kwargs['frame_time']/24
+        tmp = music.get_date(sunrise, length)
+        kwargs['musicfile'] = tmp['musicfile']
+        kwargs['musictext'] = tmp['musictext']
+        
+        if build:
+            music.build(tmp)
+            
+    return video_description(**kwargs)
+
+def save_info(**kwargs):
+    output = dict(
+        sunrise='%s'%kwargs['sunrise'],
+        sunset='%s'%kwargs['sunset'],
+        waveband=kwargs['waveband'],
+        prefix=kwargs['prefix'],
+        runtime=kwargs['runint'],
+        frame_time=kwargs['frame_time']/1000.0,
+        video_length=kwargs['video_length'],
+        sleep_time=kwargs['sleep_time'],
+        title=kwargs['title'],
+        description=kwargs['description'],
+        tags=kwargs['tags'],
+        hostname=kwargs['hostname'],
+    )
+    json.dump(output, open(DAILY_JSONFILE,'a'), indent=2)
+
+def save_h264backup():
+    # backup if something went wrong.
+    if os.path.exists(H264_FILENAME):
+        tmp = '.{:d}.h264'.format(calendar.timegm(time.gmtime()))
+        cmd = 'rsync -ravpP {} {}'.format(H264_FILENAME, 
+                                          H264_FILENAME.replace('.h264',tmp))
+        subprocess.call(cmd)
+    
+
+
+
+def timelapse_notify(message, body=None, **kwargs):
+    tmp = dict(
+        message=message,
+        body=body if body else '',
+    )
+    tmp.update(kwargs)
+    print ' Note: %s'%message
+    if not OFFLINE:
+        try:
+            print '--- Sending email --- \n TITLE: {}\n{} ------'.format(EMAIL_TITLE_TEMPLATE.render(tmp),
+                                                                  EMAIL_BODY_TEMPLATE.render(tmp))
+            # gmail.send_email(EMAIL_TITLE_TEMPLATE.render(tmp),
+            #                  EMAIL_BODY_TEMPLATE.render(tmp) )
+        except Exception as e:
+            print 'Could not send email: {}'.format(e)
+        
+
+class Errors(object):
+    def __init__(self):
+        self.errors = []
+    def __len__(self):
+        return len(self.errors)
+    def set(self, error):
+        self.errors.append(error)
+    def get(self):
+        if len(self.errors) > 0:
+            return '----ERRORS----\n' + '\n++++\n'.join(self.errors)
+ERRORS = Errors()
+    
+
+def message(success, failure, strict=False):
+    global ERRORS
+    def wrapper(function):
+        def run(*args, **kwargs):
+            try:
+                tmp = function(*args, **kwargs)
+                
+                if (len(ERRORS) > 0) & strict:
+                    raise Exception('Problem in run!')
+                else:
+                    timelapse_notify(success)
+                return tmp
+            except Exception as e:
+                ERRORS.set(traceback.format_exc().strip())
+                error = ERRORS.get()
+                
+                note = 'ERROR' if strict else 'WARN'
+                timelapse_notify('{} {}'.format(note, failure), error)
+                if strict:
+                    raise e
+        return run
+    return wrapper
+
+
+
+
+def call(cmd, strict=False):
+    try:
+        print 'Running:\n%s'%cmd
+        print subprocess.check_output(cmd, shell=True)
+    except Exception as e:
+        # ERRORS.append([e])
+        if strict:
+            raise
+
+
+@message('Uploaded to Youtube!', 'Youtube Problem')
+def upload_youtube(video_text):
+    video_text  = video_description(**video_text)
+    youtube_id = youtube.upload(video_text['mp4filename'],
+                                video_text['title'],
+                                video_text['description'],
+                                video_text['tags'],
+                                private=PRIVATE)
+    video_text['youtube_id'] = youtube_id
+    return video_text
+
+@message('Uploaded to Flickr!', 'Flickr Problem')
+def upload_flickr(video_text):
+    video_text['tags'] = video_text['tags'].replace(',', ' ')
+    video_text  = video_description(**video_text)
+    flickr.upload(video_text['mp4filename'],
+                  video_text['title'],
+                  video_text['description'],
+                  video_text['tags'],
+                  private=PRIVATE)
+    return video_text
+
+
+
+
+
+
+
+
+
+# @message('Time-lapse finished')
+@message('Finished. Everything ok?', 'Problem in run!', strict=True)
+def main():
+    '''Main program -- Attempts to record a video from before sunrise
+    to after sunset and upload the results to youtube and flickr '''
+    
+    # Ensure that we have enough space
+    check_diskspace()
+    
+    # Get video Properties
+    video_props = video_properties()
+    video_text  = video_description(**video_props)
+    video_text  = add_music(**video_text)
+    
+    # get the commands
+    record = RECORD_COMMAND.render(**video_text)
+    convert = CONVERT_COMMAND.render(**video_text)
+    
+    if NORUN:
+        print(NORUN_TEMPLATE.render(record_cmd=record,
+                                    convert_cmd=convert,
+                                    **video_text))
+        return
+    
+    # Save information about run
+    save_info(**video_text)
+    
+    # TODO backup h264 on errors
+    save_h264backup()
+    
+    # Wait untill ready
+    time.sleep(video_props['sleep_time'])
+    
+    
+    # Record the data
+    timelapse_notify('Time-lapse Start!', 'PI is recording')
+    call(record, strict=True)
+    video_text['capture_time'] = datetime.datetime.now()
+    
+    
+    # timeing is not crucial below here
+    # build the music and then video
+    video_text = add_music(build=True, **video_text)
+    call(convert)
+    
+    # make sure that we have something
+    assert os.path.exists(MP4_FILENAME), \
+           'Required file is missing: %s'%MP4_FILENAME
+    
+    if DAILY:
+        call(RSYNC_COMMAND.render(**video_props))
+    
+    # Upload 
+    if not OFFLINE:
+        # YOUTUBE -- Update text and then upload
+        #            Grab id to update flickr with youtube address
+        video_text = upload_youtube(video_text)
+        
+        # FLICKR -- update video_text and then upload
+        video_text = upload_flickr(video_text)
+    
+    # Cleanup 
+    os.remove(H264_FILENAME)
+    os.rename(MP4_FILENAME, PREVIOUS_FILENAME)
+
+
+@message('relax ok', 'relax problem')
+def relax():
+    raise ValueError('Ok ERROR')
+
+@message('Everything ok?', 'Problem!', strict=True)
+def debug():
+    relax()
+    assert True==False
 
 if __name__ == '__main__':
-  sunrise, sunset = get_times()
-  
-
+  main()
   
   
-  
-  waveband = 'IR'
-  if NIGHT:
-      waveband = 'Night IR'
-  title = waveband+' '+datetime.datetime.today().strftime("%Y-%m-%d")
-  hostname = socket.gethostname()
-  description='''{waveband} time-lapse video from a Raspberry PI
-  
-  Hostname: {hostname}
-  Run Time: {runtime:d}
-  Sunrise: {sunrise}
-  Sunset: {sunset}
-  delta: {frame_time:0.2f} seconds
-  '''.format(waveband=waveband, sunrise=sunrise, sunset=sunset, frame_time=frame_time/1000, 
-             hostname=hostname, runtime=calendar.timegm(time.gmtime()))
-  
-  if NORUN:
-      print("  Video title: {}".format(title))
-      print("  Video Description: {}".format(description))
-      sys.exit()
-  
-  output = dict(
-      sunrise='%s'%sunrise,
-      sunset='%s'%sunset,
-      runtime=calendar.timegm(time.gmtime()),
-      frame_time=frame_time/1000.0,
-      video_length=video_length,
-      sleep_time=sleep_time,
-      title=title,
-      description=description,
-      hostname=hostname,
-  )
-  json.dump(output, open(DAILY_FILENAME.replace('.mp4','.json'),'a'), indent=2)
-  
-  
-  
-  if DEBUG:
-      sleep_time = 2
-      frame_time = 3 # every 3 seconds -- simple and quick
-      video_length = 16*1000 # for 13 seconds
-  
-  if NIGHT:
-      extra = '-ss 10000000 -ISO 1600'
-  else:
-      # extra = '-awb off -ex verylong'
-      extra = '-awb on -ex verylong'
-  
-  
-  # backup if something went wrong.
-  # if os.path.exists(H264_FILENAME):
-  #     tmp = '.{:d}.h264'.format(calendar.timegm(time.gmtime()))
-  #     cmd = 'rsync -ravpP {} {}'.format(H264_FILENAME, H264_FILENAME.replace('.h264',tmp))
-  #     os.system(cmd)
-  
-  
-  #-awb auto -ex verylong
-  RECORD_COMMAND = "raspiyuv %(extra)s -h 1072 -w 1920 -t %(length)d -tl %(slice)d -o - | %(dir)s/rpi-encode-yuv > %(file)s"
-  cmd = RECORD_COMMAND % {"length": video_length,
-                          "slice": frame_time,
-                          "file": H264_FILENAME,
-                          'dir':openmax_dir,
-                          "extra":extra}
-  CONVERT_COMMAND = "MP4Box -fps 24 -add %(in_file)s %(out_file)s"
-  cmd2 = CONVERT_COMMAND % {"in_file": H264_FILENAME, "out_file": MP4_FILENAME}
-  # RSYNC_COMMAND = 'rsync -ravpP %(in_file)s %(out_file)s'
-  # cmd3 = RSYNC_COMMAND % {'in_file':MP4_FILENAME, 'out_file':DAILY_FILENAME}
-  
-  print('Record Command:\n {}'.format(cmd))
-  print("  Sleeping for %d seconds" % sleep_time)
-  print("  Video Description: {}".format(description))
-  
-  
-  
-  if not OFFLINE:
-      try:
-          gmail.send_email(hostname+' : Start in {} : {:0.1f}hr'.format(sleep_time,sleep_time/3600.),
-                          'Time-lapse \n {}'.format(description))
-      except:
-          print 'Failed to email'
-  
-  time.sleep(sleep_time)
-  if not OFFLINE:
-      try:
-          gmail.send_email(hostname+' : Time-lapse Start!',
-                      'Starting time-lapse \n {}'.format(description))
-      except:
-          print 'failed to email'
-    
-  os.system(cmd)
-  description += '\n Captured Time: {}'.format(datetime.datetime.now())
-  os.system(cmd2)
-  # os.system(cmd3)
-  
-  if DEBUG:
-      sys.exit()
-  
-  
-  if not OFFLINE:
-      if not os.path.exists(MP4_FILENAME):
-        exit("No video to upload")
-        gmail.send_email(hostname+' : Time-lapse Failure', 'Failed to find Mp4')
-        sys.exit()
-  
-      # youtube upload
-      try:
-        youtube = get_authenticated_service(args)
-        youtube_id = initialize_upload(youtube, args, title, description, private)
-        if youtube_id is not None:
-            description += '\n  Youtube: http://youtu.be/{} (higher resolution and nicer playback)'.format(youtube_id)
-        
-      except HttpError as e:
-        print "An HTTP error %d occurred:\n%s" % (e.resp.status, e.content)
-        gmail.send_email(hostname+' : Time-lapse Failure',
-                         'Failed to upload to youtube:\n{}'.format(e))
- 
-      # flickr upload
-      try:
-        print flickr.upload(MP4_FILENAME, title, description, 
-                            '"Raspberry Pi" IR timelapse timerasp JHU Baltimore Maryland',
-                            public=True)
-      except Exception as e:
-        gmail.send_email(hostname+' : Time-lapse Failure',
-                         'Failed to upload to flickr:\n{}'.format(e))
-  
-  # clean up
-  os.remove(H264_FILENAME)
-  # os.remove(MP4_FILENAME)
-  if NIGHT:
-      os.rename(MP4_FILENAME, MP4_FILENAME.replace('night','previous_night'))
-  else:
-      os.rename(MP4_FILENAME, MP4_FILENAME.replace('todays','previous'))
-  
-  if not OFFLINE:
-    gmail.send_email(hostname+' : Time-lapse Finished!','Everything is good? \n\n{}'.format(description))

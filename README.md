@@ -2,6 +2,7 @@ timerasp
 ========
 
 Rebranded Raspberry pi camera with python.
+
 http://www.raspberrypi.org/forums/viewtopic.php?f=43&t=70105&p=657575
 
   * # Setup ssh on different port
@@ -24,3 +25,6 @@ http://www.raspberrypi.org/forums/viewtopic.php?f=43&t=70105&p=657575
   wget https://github.com/tjormola/rpi-openmax-demos/archive/master.zip
   >> scintillate, pymendez_basic
   sudo pip install poster
+  sudo apt-get install gpac # mp4box
+  sudo apt-get install libav-tools # video things
+  aptitude reinstall sox 
