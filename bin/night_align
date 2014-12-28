@@ -7,13 +7,14 @@ FILE="$HOME/tmp/timelapse/align.jpg"
 SMALL="$HOME/tmp/timelapse/align_small.jpg"
 TIME="${1:-5000000}"
 EX="night"
-EX="longexposure -rot 270"
-EX='off'
-
+# EX="longexposure -rot 270"
+# EX='off'
+# -h 1080 -w 1920
 while [ 1 ]; do
 	# get image
-	raspistill -h 1080 -w 1920 -n -ISO 1600 -q 100 -ex $EX  -ss $TIME -o $FILE
+	raspistill -h 480 -w 640 -n -ISO 1600 -q 100 -ex $EX  -ss $TIME -o $FILE
 	# resize 
-	convert $FILE -adaptive-resize 480x270  $SMALL
-	display $SMALL
+	# convert $FILE -adaptive-resize 480x270  $SMALL
+	# display $SMALL
+	display $FILE
 done

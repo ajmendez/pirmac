@@ -3,9 +3,9 @@
 
 pushd ~/tmp/timelapse
 
-#todays_video.h264
-INPUT=$1
-OUTPUT=$HOME/pictures/output.mp4
+#
+INPUT=todays_video.h264
+OUTPUT=$HOME/video_archive/output.mp4
 # declare -i TIME
 # declare -i STIME
 # TIME=$(avconv -i  todays_video.h264 -vcodec copy -acodec copy -f null /dev/null 2>&1| grep 'frame=' | cut -f 2 -d ' ')/25

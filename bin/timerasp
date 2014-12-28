@@ -293,9 +293,11 @@ def save_h264backup():
 
 
 def timelapse_notify(message, body=None, **kwargs):
+    if body is None:
+        body = kwargs.get('description', '')
     tmp = dict(
         message=message,
-        body=body if body else '',
+        body=body
     )
     tmp.update(kwargs)
     print ' Note: %s'%message
@@ -306,7 +308,7 @@ def timelapse_notify(message, body=None, **kwargs):
         except Exception as e:
             print 'Could not send email: {}'.format(e)
     else:
-        print '--- Sending email --- \n TITLE: {}\n{} ------'.format(EMAIL_TITLE_TEMPLATE.render(tmp),
+        print '--- Sending email --- \n TITLE: {}\n{}\n ------'.format(EMAIL_TITLE_TEMPLATE.render(tmp),
                                                               EMAIL_BODY_TEMPLATE.render(tmp))
         
         
@@ -334,14 +336,14 @@ def message(success, failure, strict=False):
                 if (len(ERRORS) > 0) & strict:
                     raise Exception('Problem in run!')
                 else:
-                    timelapse_notify(success)
+                    timelapse_notify(success, **kwargs)
                 return tmp
             except Exception as e:
                 ERRORS.set(traceback.format_exc().strip())
                 error = ERRORS.get()
                 
                 note = 'ERROR' if strict else 'WARN'
-                timelapse_notify('{} {}'.format(note, failure), error)
+                timelapse_notify('{} {}'.format(note, failure), error, **kwargs)
                 if strict:
                     raise e
         return run
@@ -386,8 +388,9 @@ def upload_flickr(video_text):
 
 
 
-
-
+@message('testing', 'failing')
+def test(**kwargs):
+    print 'running test'
 
 
 # @message('Time-lapse finished')
@@ -422,12 +425,12 @@ def main():
     save_h264backup()
     
     # Wait untill ready
-    print(info)
+    timelapse_notify('Time-lapse Sleeping', 'Waiting...\n%s'%info)
     time.sleep(video_props['sleep_time'])
     
     
     # Record the data
-    timelapse_notify('Time-lapse Start!', 'PI is recording')
+    timelapse_notify('Time-lapse Start!', 'PI is recording\n%s'%video_text['description'])
     call(record, strict=True)
     video_text['capture_time'] = datetime.datetime.now()
     
