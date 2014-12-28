@@ -93,8 +93,8 @@ DESCRIPTION_TEMPLATE = Template(u'''{% if NIGHT %}{{prefix.capitalize()}} {% end
   Sunrise: {{sunrise}}
   Sunset: {{sunset}}
   delta: {{ "%0.2f" % (frame_time/1000.0)}} seconds'''
-  '{% if capture_time %}\n    Captured Time: {{capture_time}} {% endif %}'
-  '{% if youtube_id %}\n    Youtube: http://youtu.be/{{youtube_id}} (higher resolution and nicer playback){% endif %}'
+  '{% if capture_time %}\n  Captured Time: {{capture_time}} {% endif %}'
+  '{% if youtube_id %}\n  Youtube: http://youtu.be/{{youtube_id}} (higher resolution and nicer playback){% endif %}'
   '{% if musictext %} \n\n{{musictext}} {% endif %}'
 )
 
@@ -251,17 +251,15 @@ def video_description(**kwargs):
     
     return props
 
-def add_music(build=False, **kwargs):
+def add_music(**kwargs):
     if MUSIC:
         sunrise = kwargs['sunrise']
         length = kwargs['video_length']/kwargs['frame_time']/24
-        tmp = music.get_date(sunrise, length)
+        # tmp = music.get_date(sunrise, length)
+        tmp = music.get_random_trackset(sunrise, length)
         kwargs['musicfile'] = tmp['musicfile']
         kwargs['musictext'] = tmp['musictext']
-        
-        if build:
-            music.build(tmp)
-            
+    
     return video_description(**kwargs)
 
 def save_info(**kwargs):
@@ -279,7 +277,7 @@ def save_info(**kwargs):
         tags=kwargs['tags'],
         hostname=kwargs['hostname'],
     )
-    json.dump(output, open(DAILY_JSONFILE,'a'), indent=2)
+    json.dump(output, open(DAILY_JSONFILE,'w'), indent=2)
 
 def save_h264backup():
     # backup if something went wrong.
@@ -436,8 +434,6 @@ def main():
     
     
     # timeing is not crucial below here
-    # build the music and then video
-    video_text = add_music(build=True, **video_text)
     call(convert)
     
     # make sure that we have something
@@ -455,6 +451,8 @@ def main():
         
         # FLICKR -- update video_text and then upload
         video_text = upload_flickr(video_text)
+    
+    save_info(**video_text)
     
     # Cleanup 
     try:
