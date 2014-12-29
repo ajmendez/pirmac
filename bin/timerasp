@@ -362,6 +362,8 @@ def call(cmd, strict=False):
 
 @message('Uploaded to Youtube!', 'Youtube Problem')
 def upload_youtube(video_text):
+    '''return id to update flickr'''
+    print 'Uploading to Youtube'
     video_text  = video_description(**video_text)
     youtube_id = youtube.upload(video_text['mp4filename'],
                                 video_text['title'],
@@ -373,6 +375,8 @@ def upload_youtube(video_text):
 
 @message('Uploaded to Flickr!', 'Flickr Problem')
 def upload_flickr(video_text):
+    '''upload to flickr'''
+    print 'Uploading to Flickr'
     video_text['tags'] = video_text['tags'].replace(',', ' ')
     video_text  = video_description(**video_text)
     flickr.upload(video_text['mp4filename'],
@@ -445,11 +449,7 @@ def main():
     
     # Upload 
     if not OFFLINE:
-        # YOUTUBE -- Update text and then upload
-        #            Grab id to update flickr with youtube address
         video_text = upload_youtube(video_text)
-        
-        # FLICKR -- update video_text and then upload
         video_text = upload_flickr(video_text)
     
     save_info(**video_text)
