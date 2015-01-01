@@ -69,7 +69,8 @@ if NIGHT:
 else:
     PREFIX = 'todays'
     OLDPREFIX = 'previous'
-    EXTRA_SETTINGS = '-awb auto -ex verylong'
+    # EXTRA_SETTINGS = '-awb auto -ex verylong'
+    EXTRA_SETTINGS = '-awb auto'
 
 
 RPI_ENCODE = os.path.expanduser('~/tmp/timelapse/rpi-openmax-demos-master/rpi-encode-yuv')
@@ -450,9 +451,10 @@ def main():
     # Upload 
     if not OFFLINE:
         video_text = upload_youtube(video_text)
-        video_text = upload_flickr(video_text)
+        save_info(**video_text) # flickr breaks things
+        # video_text = upload_flickr(video_text)
     
-    save_info(**video_text)
+    
     
     # Cleanup 
     try:
