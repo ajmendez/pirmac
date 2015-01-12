@@ -1,10 +1,10 @@
 #!/bin/bash
 
-PIDFILE=$HOME/tmp/timelapse.pid
-LOGFILE=$HOME/tmp/timelapse.log
+PIDFILE=$HOME/tmp/timelapse/timelapse.pid
+LOGFILE=$HOME/tmp/timelapse/timelapse.log
+OLDFILE=$HOME/tmp/timelapse/timelapse.old
 
-
-OPTIONS='music daily'
+OPTIONS='daily'
 
 pushd ~/tmp/timelapse/ > /dev/null 2>&1
 source /home/pi/.bashrc
@@ -37,6 +37,10 @@ if [ "$(pidof raspiyuv)" ]; then
 fi
 
 if [ $START -eq 1 ]; then
+    if [ -e "$LOGFILE" ]; then 
+      mv $LOGFILE $OLDFILE
+    fi
+    
     echo "-------------"
     echo " $(date) : $(date +%s)"
     echo "> $(date) : $(date +%s)" > $LOGFILE
