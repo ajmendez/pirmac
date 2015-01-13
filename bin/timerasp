@@ -469,7 +469,7 @@ def main():
     
     # Wait untill ready
     timelapse_notify('Time-lapse Sleeping', 'Waiting...\n%s'%info)
-    sleep(video_props['start_time'])
+    sleep(video_props['sunrise'])
     # time.sleep(video_props['sleep_time'])
     
     
@@ -493,7 +493,7 @@ def main():
     if not OFFLINE:
         video_text = upload_youtube(video_text)
         save_info(**video_text) # flickr breaks things
-        # video_text = upload_flickr(video_text)
+        video_text = upload_flickr(video_text)
     
     
     
