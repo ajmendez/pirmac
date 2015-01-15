@@ -5,14 +5,15 @@ import sys
 import json
 from timerasp import youtube
 
-if __name__ == '__main__':
+def upload(filename):
+    '''Upload to youtube'''
     params = dict(
         title='debug',
         description='debug video',
         tags='debug, timerasp',
         private=True,
     )
-    infofile = sys.argv[1].replace('.mp4', '.json')
+    infofile = filename.replace('_video.mp4', '_info.json')
     if os.path.exists(infofile):
         print "loading info from: {}".format(infofile)
         with open(infofile,'r') as f:
@@ -20,4 +21,14 @@ if __name__ == '__main__':
         for key in ['title', 'description', 'tags']:
             params[key] = tmp[key]
     
-    youtube.upload(sys.argv[1], **params)
+    tmp = 'Title: {title}\n\nDescription: {description}\n\nTags: {tags}'
+    print tmp.format(**params)
+    
+    if raw_input('upload? [y/n] ').lower()[0] != 'y':
+        print 'Not uploading!'
+        return
+    
+    youtube.upload(filename, **params)
+
+if __name__ == '__main__':
+    upload(sys.argv[1])
