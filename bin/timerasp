@@ -51,6 +51,7 @@ START = ('start' in sys.argv)
 NOW = datetime.datetime.now()
 RUNINT = calendar.timegm(time.gmtime())
 
+
 # LAT, LON = '48.457213','-122.882080'
 # WAVEBAND = 'optical'
 # TAGS = 'timerasp, timelapse, "raspberry pi"'
@@ -58,6 +59,15 @@ RUNINT = calendar.timegm(time.gmtime())
 WAVEBAND = 'IR'
 LAT, LON = '39.331628', '-76.623434' # JHU
 TAGS = 'timerasp, timelapse, maryland, baltimore, JHU, "raspberry pi"'
+
+
+# # LAT, LON = '48.457213','-122.882080'
+# WAVEBAND = 'optical'
+# TAGS = 'timerasp, timelapse, "raspberry pi"'
+#
+# # WAVEBAND = 'IR'
+# LAT, LON = '39.331628', '-76.623434' # JHU
+# # TAGS = 'timerasp, timelapse, maryland, baltimore, JHU, "raspberry pi"'
 
 # Set some nice settings
 MAIN_SETTINGS = '-h 1072 -w 1920 -n' # no preview
@@ -153,7 +163,7 @@ def check_diskspace(freespace=1, outdir=OUT_DIR):
             space, freespace, outdir)
 
 
-def get_times(delta_before=60, delta_after=60):
+def get_times(delta_before=60, delta_after=180):
     '''Attempt to get the right start and ending times.
     delta_before = {delta_before} minutes before sunrise to start the video.
     delta_after = {delta_after} minutes after sunrise to start the video.
