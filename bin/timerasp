@@ -53,12 +53,13 @@ RUNINT = calendar.timegm(time.gmtime())
 
 
 # LAT, LON = '48.457213','-122.882080'
-# WAVEBAND = 'optical'
-# TAGS = 'timerasp, timelapse, "raspberry pi"'
-
-WAVEBAND = 'IR'
 LAT, LON = '39.331628', '-76.623434' # JHU
-TAGS = 'timerasp, timelapse, maryland, baltimore, JHU, "raspberry pi"'
+WAVEBAND = 'optical'
+TAGS = 'timerasp, timelapse, "raspberry pi"'
+
+#WAVEBAND = 'IR'
+#LAT, LON = '39.331628', '-76.623434' # JHU
+#TAGS = 'timerasp, timelapse, maryland, baltimore, JHU, "raspberry pi"'
 
 
 # # LAT, LON = '48.457213','-122.882080'
@@ -81,8 +82,10 @@ if NIGHT:
 else:
     PREFIX = 'todays'
     OLDPREFIX = 'previous'
-    EXTRA_SETTINGS = '-awb auto -ex verylong'
-    # EXTRA_SETTINGS = '-awb auto'
+    if WAVEBAND == 'IR':
+        EXTRA_SETTINGS = '-awb auto -ex verylong'
+    else:
+        EXTRA_SETTINGS = '-awb auto'
 
 
 RPI_ENCODE = os.path.expanduser('~/tmp/timelapse/rpi-openmax-demos-master/rpi-encode-yuv')
@@ -163,7 +166,7 @@ def check_diskspace(freespace=1, outdir=OUT_DIR):
             space, freespace, outdir)
 
 
-def get_times(delta_before=60, delta_after=180):
+def get_times(delta_before=60, delta_after=60):
     '''Attempt to get the right start and ending times.
     delta_before = {delta_before} minutes before sunrise to start the video.
     delta_after = {delta_after} minutes after sunrise to start the video.
@@ -227,8 +230,12 @@ def video_properties():
         # frame every 5 seconds
         # Record for a total of 4 minute
         # gives ~ 2 seconds of film
+        # frame_time = 5 * 1000
+        # video_length = 4 * 60 * 1000
+        
         frame_time = 5 * 1000
         video_length = 4 * 60 * 1000
+                
         sunset = sunrise + datetime.timedelta(seconds=video_length / 1000)
     
     
