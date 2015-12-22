@@ -2,7 +2,31 @@
 '''TimeRasp command
 2014 Mendez
 
-# ephem, httplib2, flickrapi, exifread, poster, apiclient, urllib3, jinja2
+# ephem, httplib2, "flickrapi<2.0", exifread, poster, apiclient, urllib3, jinja2
+apiclient (1.0.2)
+argparse (1.2.1)
+chardet (2.3.0)
+colorama (0.3.2)
+ephem (3.7.6.0)
+ExifRead (2.1.2)
+flickrapi (1.4.5)
+html5lib (0.999)
+httplib2 (0.9.2)
+Jinja2 (2.8)
+MarkupSafe (0.23)
+ndg-httpsclient (0.3.2)
+pip (1.5.6)
+poster (0.8.1)
+pyasn1 (0.1.7)
+pyOpenSSL (0.13.1)
+requests (2.4.3)
+RPi.GPIO (0.6.0a3)
+setuptools (5.5.1)
+six (1.8.0)
+urllib3 (1.9.1)
+wheel (0.24.0)
+wsgiref (0.1.2)
+./timerasp start night daily norun
 '''
 
 import os
@@ -52,10 +76,10 @@ NOW = datetime.datetime.now()
 RUNINT = calendar.timegm(time.gmtime())
 
 # LAT, LON = '48.457213','-122.882080'
-# WAVEBAND = 'optical'
+WAVEBAND = 'optical'
 # TAGS = 'timerasp, timelapse, "raspberry pi"'
 
-WAVEBAND = 'IR'
+# WAVEBAND = 'IR'
 LAT, LON = '39.331628', '-76.623434' # JHU
 TAGS = 'timerasp, timelapse, maryland, baltimore, JHU, "raspberry pi"'
 
@@ -66,13 +90,16 @@ if NIGHT:
     PREFIX = 'night'
     OLDPREFIX = 'previous_night'
     NIGHT_START = 22   # 10pm
-    NIGHT_DURATION = 6 # hours
-    EXTRA_SETTINGS = '-ss 10000000 -ISO 1600'
+    NIGHT_DURATION = 6 # hours -> 4am
+    # EXTRA_SETTINGS = '-ss 5000000 -ISO 1600'
+    EXTRA_SETTINGS = '-awb auto -ex verylong -ISO 800 -drc medium -st -ae 10,0x00,0x8080FF -a 28 '
 else:
     PREFIX = 'todays'
     OLDPREFIX = 'previous'
-    EXTRA_SETTINGS = '-awb auto -ex verylong'
-    # EXTRA_SETTINGS = '-awb auto'
+    if WAVEBAND == 'IR':
+        EXTRA_SETTINGS = '-awb auto -ex verylong'
+    else:
+        EXTRA_SETTINGS = '-awb auto'
 
 
 RPI_ENCODE = os.path.expanduser('~/tmp/timelapse/rpi-openmax-demos-master/rpi-encode-yuv')
@@ -153,7 +180,7 @@ def check_diskspace(freespace=1, outdir=OUT_DIR):
             space, freespace, outdir)
 
 
-def get_times(delta_before=60, delta_after=60):
+def get_times(delta_before=60, delta_after=120):
     '''Attempt to get the right start and ending times.
     delta_before = {delta_before} minutes before sunrise to start the video.
     delta_after = {delta_after} minutes after sunrise to start the video.
@@ -175,6 +202,9 @@ def get_times(delta_before=60, delta_after=60):
     # if we are doing a night start at 10 and record for 6 hrs
     if NIGHT:
         sunrise = datetime.datetime(NOW.year, NOW.month, NOW.day, NIGHT_START)
+        if START:
+            sunrise = NOW
+        
         sunset = sunrise + datetime.timedelta(hours=NIGHT_DURATION)
         if (sunrise > sunset) or (START):
             sunrise = NOW

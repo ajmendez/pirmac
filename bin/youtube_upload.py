@@ -14,7 +14,7 @@ def upload(filename):
         private=True,
     )
     infofile = filename.replace('_video.mp4', '_info.json')
-    if os.path.exists(infofile):
+    if os.path.exists(infofile) & (infofile != filename):
         print "loading info from: {}".format(infofile)
         with open(infofile,'r') as f:
             tmp = json.load(f)

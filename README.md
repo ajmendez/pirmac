@@ -19,7 +19,7 @@ http://www.raspberrypi.org/forums/viewtopic.php?f=43&t=70105&p=657575
   * sudo pip install -I flickrapi==1.4.5
   * sudo pip install picamera
   *  sudo pip install --allow-unverified pil --allow-external pil pil
-  sudo apt-get install python-imaging python-scipy python-skimage 
+  sudo apt-get install python-imaging python-scipy python-skimage   --no-install-recommends
   sudo pip install ephem
   sudo pip install --upgrade google-api-python-client pyephem httplib2
   wget https://github.com/tjormola/rpi-openmax-demos/archive/master.zip
@@ -28,3 +28,6 @@ http://www.raspberrypi.org/forums/viewtopic.php?f=43&t=70105&p=657575
   sudo apt-get install gpac # mp4box
   sudo apt-get install libav-tools # video things
   aptitude reinstall sox 
+  
+  
+  sudo pip install --upgrade google-api-python-client
