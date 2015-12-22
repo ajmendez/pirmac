@@ -12,10 +12,18 @@ import datetime
 import calendar
 from timerasp import gmail, flickr
 
-from apiclient.discovery import build
+try:
+    from apiclient.discovery import build
+    from apiclient.errors import HttpError
+    from apiclient.http import MediaFileUpload
+except:
+    # WTF!
+    from googleapiclient.discovery import build
+    from googleapiclient.errors import HttpError
+    from googleapiclient.http import MediaFileUpload
+    
+    
 from oauth2client.file import Storage
-from apiclient.errors import HttpError
-from apiclient.http import MediaFileUpload
 from oauth2client.tools import argparser, run_flow
 from oauth2client.client import flow_from_clientsecrets
 

@@ -13,7 +13,12 @@ def upload(filename):
         tags='debug, timerasp',
         private=True,
     )
-    infofile = filename.replace('_video.mp4', '_info.json')
+    # infofile = filename.replace('_video.mp4', '_info.json')
+    # if os.path.exists(infofile) & (infofile != filename):
+    
+    infofile = filename.replace('.mp4', '.json')
+    if '_video' in filename:
+        infofile = infofile.replace('_video','_info')
     if os.path.exists(infofile) & (infofile != filename):
         print "loading info from: {}".format(infofile)
         with open(infofile,'r') as f:

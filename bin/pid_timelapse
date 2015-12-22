@@ -5,6 +5,7 @@ LOGFILE=$HOME/tmp/timelapse/timelapse.log
 OLDFILE=$HOME/tmp/timelapse/timelapse.old
 
 OPTIONS='daily'
+# OPTIONS='daily offline'
 
 pushd ~/tmp/timelapse/ > /dev/null 2>&1
 source /home/pi/.bashrc

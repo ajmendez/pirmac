@@ -38,6 +38,17 @@ Subject:{subject}
 
 '''
 
+def setup_email():
+    email, address, client_id, client_secret, refresh_token = auth('gmail', ['email', 'address', 'client_id', 'client_secret', 'refresh_token'])
+    scope = 'https://mail.google.com/'
+    print 'To authorize token, visit this url and follow the directions:'
+    print '  %s' % gmail_oauth2.GeneratePermissionUrl(client_id, scope)
+    authorization_code = raw_input('Enter verification code: ').strip()
+    response = gmail_oauth2.AuthorizeTokens(client_id, client_secret, authorization_code)
+    print 'Refresh Token: %s' % response['refresh_token']
+    print 'Access Token: %s' % response['access_token']
+    print 'Access Token Expiration Seconds: %s' % response['expires_in']
+    
 
 
 def send_email(subject, message, addinfo=True):
@@ -96,4 +107,5 @@ def send_email_xoauth(subject, message, addinfo=True):
 
 
 if __name__ == '__main__':
+    # setup_email()
     send_email('email test', 'body')

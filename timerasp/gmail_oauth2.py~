@@ -227,16 +227,16 @@ def RefreshToken(client_id, client_secret, refresh_token):
   params['client_secret'] = client_secret
   params['refresh_token'] = refresh_token
   params['grant_type'] = 'refresh_token'
-#  params['access_type'] = 'offline'
-#  params['approval_prompt'] = 'force'
+  params['access_type'] = 'offline'
+  params['approval_prompt'] = 'force'
   request_url = AccountsUrl('o/oauth2/token')
 
-#  print request_url
-#  print urllib.urlencode(params)
+  print request_url
+  print urllib.urlencode(params)
   tmp = urllib2.urlopen(request_url, urllib.urlencode(params))
-#  print vars(tmp)
+  print vars(tmp)
   response = tmp.read()
-#  print response
+  print response
   
   
   
